@@ -10,6 +10,7 @@
 #include <fcgi_stdio.h>
 #include <sqlite3.h>
 sqlite3 *pdb = NULL;
+v_list_t head;
 
 int cgi_init()
 {
@@ -20,6 +21,17 @@ int cgi_init()
 		uuci_get_free(array, num);
 	}
 }
+
+typedef struct board_info{
+	char *mac;
+	const char *name;
+}board_info_t;
+
+board_info_t board_mac[] = {
+					{"aa:aa:aa:aa:aa:aa", "no.1_pool"},
+					{"bb:bb:bb:bb:bb:bb", "no.2_pool"}
+					};
+
 
 int main()
 {
@@ -59,6 +71,16 @@ reply_print:
 	if (out)
 		free(out);
 */
+	v_list_init(&head);
+
+	for (int i = 0; i< sizeof(board_mac)/sizeof(board_mac[0]);i++)
+	{
+		esp32_board_t *board = malloc(sizeof(esp32_board_t));
+		memset(board, 0, sizeof(esp32_board_t));
+		strncpy(board->mac, board_mac[i].mac, sizeof(board->mac));
+		strncpy(board->name, board_mac[i].name, sizeof(board->name));
+		v_list_add(&head, board->mac, board);
+	}
 	while(FCGI_Accept() >= 0)
 	{
 		//cgi_init();

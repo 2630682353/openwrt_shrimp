@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include "cJSON.h"
 #include "list.h"
+#include <time.h>
 
 typedef struct v_list{
 	char *key;
@@ -25,6 +26,13 @@ typedef struct connection{
 	char *html_path;
 	char *out_str;
 }connection_t;
+
+typedef struct esp32_board{
+	char name[32];
+	char mac[32];
+	time_t last_heart_beat_time;
+	int is_online;
+}esp32_board_t;
 
 extern void connection_init(connection_t *con);
 extern void connection_parse(connection_t *con, char *src);

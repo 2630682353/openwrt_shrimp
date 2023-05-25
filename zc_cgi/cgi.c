@@ -17,6 +17,7 @@
 #include <sqlite3.h>
 
 extern sqlite3 *pdb;
+extern v_list_t head;
 
 enum {
 
@@ -54,6 +55,23 @@ enum {
 	CGI_ERR_RULE,
 };
 
+int query_table(char *sql, int r, int c)
+{
+    char *errMsg;
+    char **dbResult;
+    int nRow = 0, nColumn = 0;
+    int rc;
+
+    int result;
+    rc = sqlite3_get_table(pdb,sql,&dbResult,&nRow,&nColumn,&errMsg);
+    if(rc == SQLITE_OK && r<=nRow &&r>0 && c<=nColumn)
+    {
+        result = atoi(dbResult[r*nColumn+c]);
+        sqlite3_free_table(dbResult);
+        return result;
+    }
+}
+
 void strlower(char *s)
 {
 	int i;
@@ -83,6 +101,81 @@ int query_data_to_json(void *para,int ncol,char *col_val[],char ** col_name)
 	}
 	cJSON_AddItemToArray(array, item);
 	return 0;
+}
+
+int http_send(char *url, cJSON *send, cJSON **recv, char *http_headers[])
+{
+	int ret = -1;
+	char *jstr = NULL, *back_str = NULL;
+	cJSON *obj = NULL;
+	back_str = (char*)malloc(4096);
+	memset(back_str, 0, 4096);
+	
+	char header_str[256] = {0};
+
+	struct curl_slist *headers = NULL;
+	CURLcode res = CURLE_OK;
+	CURL *mycurl = curl_easy_init();
+	snprintf(header_str, sizeof(header_str) - 1, "DevMac: %s", gateway.mac);
+	headers = curl_slist_append(headers, header_str);
+	if (http_headers) {
+		int i = 0;
+		while (http_headers[i]) {
+			headers = curl_slist_append(headers, http_headers[i]);
+			i++;
+		}
+
+	}
+		
+	if (!mycurl)
+		goto out;
+	curl_easy_setopt(mycurl, CURLOPT_URL, url);
+	curl_easy_setopt(mycurl, CURLOPT_TIMEOUT, HTTP_TIMEOUT); 
+	curl_easy_setopt(mycurl, CURLOPT_WRITEFUNCTION, receive_data);
+	curl_easy_setopt(mycurl, CURLOPT_WRITEDATA, back_str);
+	
+	if (!send) {
+		curl_easy_setopt(mycurl, CURLOPT_HTTPHEADER, headers);
+		res = curl_easy_perform(mycurl);
+
+	} else {
+		snprintf(header_str, sizeof(header_str) - 1, "Content-Type:application/json");
+		headers = curl_slist_append(headers, header_str); 
+		jstr = cJSON_PrintUnformatted(send); 
+		GATEWAY_LOG(LOG_DEBUG, "http send %s\n", jstr);
+		curl_easy_setopt(mycurl, CURLOPT_HTTPHEADER, headers); 
+		curl_easy_setopt(mycurl, CURLOPT_POSTFIELDS, jstr); 
+		res = curl_easy_perform(mycurl);
+	}
+	if (res != CURLE_OK) {
+		GATEWAY_LOG(LOG_WARNING, "curl_easy_perform() failed: %d\n", res);
+		goto out;
+    }
+	GATEWAY_LOG(LOG_DEBUG, "http recv %s\n", back_str);
+	obj = cJSON_Parse(back_str);
+	if (!obj)
+		goto out;
+	cJSON *result = cJSON_GetObjectItem(obj, "result");
+	if (!result)
+		goto out;
+	ret = result->valueint;
+	if (ret)
+		goto out;
+	*recv = obj;
+out:
+	if (back_str)
+		free(back_str);
+	if (jstr)
+		free(jstr);
+	if (ret) {
+		recv = NULL;
+		if (obj)
+			cJSON_Delete(obj);
+	}
+	if (headers)
+		curl_slist_free_all(headers);
+	curl_easy_cleanup(mycurl);
+	return ret;
 }
 
 int cgi_snd_msg(int cmd, void *snd, int snd_len, void **rcv, int *rcv_len)
@@ -384,6 +477,81 @@ out:
 	return 1;
 }
 
+int cgi_sys_update_air_pressure_handler(connection_t *con)
+{	
+	char *pressure = con_value_get(con, "pressure");
+	char *client_mac = con_value_get(con, "client_mac");
+	char *client_pressure_index = con_value_get(con, "client_pressure_index");
+	if (!pressure || !client_mac || !client_pressure_index) {
+		cJSON_AddNumberToObject(con->response, "code", 1);
+		cJSON_AddStringToObject(con->response, "msg", "param not right");
+		goto out;
+	}
+	char sql[256] = {0};
+	char *errmsg = NULL;
+	snprintf(sql, sizeof(sql) - 1, "INSERT INTO `air_pressure` (client_mac, client_pressure_index, pressure) "
+		"VALUES(\"%s\",%s,\"%s\");", client_mac, client_pressure_index, pressure);
+	if(SQLITE_OK != sqlite3_exec(pdb,sql,NULL,NULL,&errmsg))
+	{
+		CGI_LOG(LOG_ERR, "insert record fail!%s\n",errmsg);
+		cJSON_AddNumberToObject(con->response, "code", 1);
+		cJSON_AddStringToObject(con->response, "msg", errmsg);
+		goto out;
+	}
+	cJSON_AddNumberToObject(con->response, "code", 0);
+
+out:
+	return 1;
+}
+
+int cgi_sys_query_air_pressure_handler(connection_t *con)
+{	
+	char *period = con_value_get(con, "period");
+	char *client_mac = con_value_get(con, "client_mac");
+	char *client_pressure_index = con_value_get(con, "client_pressure_index");
+	if (!period || !client_mac || !client_pressure_index) {
+		cJSON_AddNumberToObject(con->response, "code", 1);
+		cJSON_AddStringToObject(con->response, "msg", "param not right");
+		goto out;
+	}
+	char sql[256] = {0};
+	char *errmsg = NULL;
+	char condition[128] = {0};
+	if (strcmp(client_mac, "all") != 0)
+	{
+		snprintf(condition, sizeof(condition), " and client_mac='%s' ", client_mac);
+	}
+	if (strcmp(client_temper_index, "all") != 0)
+	{
+		snprintf(condition, sizeof(condition), " and client_pressure_index=%s ", client_pressure_index);
+	}
+	if (strcmp(period, "recent") == 0)
+	{
+		
+		//snprintf(sql, sizeof(sql) - 1, "select * from `temper` where capture_time between datetime('now','start of day','+1 seconds') "
+		//	"and  datetime('now','start of day','+1 days','-1 seconds') %s", condition);
+		snprintf(sql, sizeof(sql) - 1, "select * from `air_pressure` where capture_time between datetime('now','-1 days', '+1 seconds') "
+			"and  datetime('now','-1 seconds') %s", condition);
+		
+	}
+	cJSON *array = cJSON_CreateArray();
+	//CGI_LOG(LOG_ERR, "sql:%s\n",sql);
+	if(SQLITE_OK != sqlite3_exec(pdb, sql, query_data_to_json,(void *)array, &errmsg))
+	{
+			CGI_LOG(LOG_ERR, "queray fail!%s\n",errmsg);
+			cJSON_AddNumberToObject(con->response, "code", 1);
+			cJSON_AddStringToObject(con->response, "msg", errmsg);
+			goto out;
+	}
+	cJSON_AddNumberToObject(con->response, "code", 0);
+	cJSON_AddItemToObject(con->response, "data", array);
+
+out:
+	return 1;
+}
+
+
+
 int cgi_sys_update_temper_handler(connection_t *con)
 {	
 	char *temper = con_value_get(con, "temper");
@@ -456,8 +624,10 @@ int cgi_sys_query_temper_handler(connection_t *con)
 	if (strcmp(period, "recent") == 0)
 	{
 		
-		snprintf(sql, sizeof(sql) - 1, "select * from `temper` where capture_time between datetime('now','start of day','+1 seconds') "
-			"and  datetime('now','start of day','+1 days','-1 seconds') %s", condition);
+		//snprintf(sql, sizeof(sql) - 1, "select * from `temper` where capture_time between datetime('now','start of day','+1 seconds') "
+		//	"and  datetime('now','start of day','+1 days','-1 seconds') %s", condition);
+		snprintf(sql, sizeof(sql) - 1, "select * from `temper` where capture_time between datetime('now','-1 days', '+1 seconds') "
+			"and  datetime('now','-1 seconds') %s", condition);
 		
 	}
 	cJSON *array = cJSON_CreateArray();
@@ -478,6 +648,141 @@ int cgi_sys_query_temper_handler(connection_t *con)
 out:
 	return 1;
 }
+
+int cgi_sys_heart_beat_handler(connection_t *con)
+{	
+	char *client_mac = con_value_get(con, "client_mac");
+	if (!client_mac) {
+		cJSON_AddNumberToObject(con->response, "code", 1);
+		cJSON_AddStringToObject(con->response, "msg", "no client_mac");
+		goto out;
+	}
+	char *board = v_list_get(&head, client_mac);
+	if (board != NULL)
+	{
+		((esp32_board_t *)board)->is_online = 1;
+		((esp32_board_t *)board)->last_heart_beat_time = uptime();
+		cJSON_AddNumberToObject(con->response, "code", 0);
+	}else
+	{
+		cJSON_AddNumberToObject(con->response, "code", 1);
+		cJSON_AddStringToObject(con->response, "msg", "no board_info");
+	}
+
+out:
+	return 1;
+}
+
+int cgi_sys_add_sensor_info_handler(connection_t *con)
+{	
+	char *client_mac = con_value_get(con, "client_mac");
+	//char *board_name = con_value_get(con, "board_name");
+	char *sensor_type = con_value_get(con, "sensor_type");
+	char *sensor_pin = con_value_get(con, "sensor_pin");
+	char sql[256] = {0};
+	char *errmsg = NULL;
+	if (!client_mac || !sensor_pin || !sensor_type) {
+		cJSON_AddNumberToObject(con->response, "code", 1);
+		cJSON_AddStringToObject(con->response, "msg", "no client_mac or no board_name");
+		goto out;
+	}
+//	char *board = v_list_get(&head, client_mac);
+//	if (board != NULL)
+//	{
+//		cJSON_AddNumberToObject(con->response, "code", 1);
+//		cJSON_AddStringToObject(con->response, "msg", "board_info exist");
+//	}else
+//	{
+	/*
+
+		esp32_board_t *board = malloc(sizeof(esp32_board_t));
+		strncpy(board->mac, client_mac, sizeof(board->mac));
+		strncpy(board->name, board_name, sizeof(board->name));
+		v_list_add(&head, board->mac, board);
+		cJSON_AddNumberToObject(con->response, "code", 0);
+		*/
+	snprintf(sql, sizeof(sql), "select count(*) from sensor_info where client_mac='%s' and sensor_pin=%s;",
+	client_mac, sensor_pin);
+	if (query_table(sql, 0,0) > 0)
+	{
+		cJSON_AddNumberToObject(con->response, "code", 1);
+		cJSON_AddStringToObject(con->response, "msg", "sensor pin exist");
+		goto out;
+	}else
+	{
+		
+		snprintf(sql, sizeof(sql) - 1, "INSERT INTO `sensor_info` (client_mac, sensor_pin, type) "
+			"VALUES(\"%s\",%d,\"%d\");", client_mac, atoi(sensor_pin), atoi(sensor_type));
+		if(SQLITE_OK != sqlite3_exec(pdb,sql,NULL,NULL,&errmsg))
+		{
+				CGI_LOG(LOG_ERR, "insert record fail!%s\n",errmsg);
+				cJSON_AddNumberToObject(con->response, "code", 1);
+				cJSON_AddStringToObject(con->response, "msg", errmsg);
+				goto out;
+		}
+	}
+	cJSON_AddNumberToObject(con->response, "code", 0);
+//	}
+
+out:
+	return 1;
+}
+
+int cgi_sys_query_sensor_info_handler(connection_t *con)
+{	
+	char *client_mac = con_value_get(con, "client_mac");
+
+	char sql[256] = {0};
+	char *errmsg = NULL;
+	if (!client_mac) {
+		cJSON_AddNumberToObject(con->response, "code", 1);
+		cJSON_AddStringToObject(con->response, "msg", "no client_mac or client_mac=all");
+		goto out;
+	}
+	cJSON *array = cJSON_CreateArray();
+	snprintf(sql, sizeof(sql), "select * from sensor_info;");
+	if(SQLITE_OK != sqlite3_exec(pdb, sql, query_data_to_json,(void *)array, &errmsg))
+	{
+			CGI_LOG(LOG_ERR, "queray fail!%s\n",errmsg);
+			cJSON_AddNumberToObject(con->response, "code", 1);
+			cJSON_AddStringToObject(con->response, "msg", errmsg);
+			goto out;
+	}
+	cJSON_AddNumberToObject(con->response, "code", 0);
+	cJSON_AddItemToObject(con->response, "data", array);
+out:
+	return 1;
+}
+
+
+int cgi_sys_get_boards_status_handler(connection_t *con)
+{	
+
+	v_list_t *p;
+	v_list_t *q;
+	cJSON *board_array, *item;
+
+	board_array = cJSON_CreateArray();
+	
+	for(p = head.next; p; p = q) {
+		item = cJSON_CreateObject();
+		cJSON_AddStringToObject(item, "mac", ((esp32_board_t *)p->value)->mac);
+		cJSON_AddStringToObject(item, "name", ((esp32_board_t *)p->value)->name);
+		cJSON_AddNumberToObject(item, "is_online", ((esp32_board_t *)p->value)->is_online);
+		cJSON_AddItemToArray(board_array, item);
+		q = p->next;
+	}
+
+	
+	cJSON_AddNumberToObject(con->response, "code", 0);
+	cJSON_AddItemToObject(con->response, "data", board_array);
+
+out:
+	return 1;
+}
+
+
+
 
 
 
