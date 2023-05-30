@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+	<meta charset="utf-8" />
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<link rel="stylesheet" href="css/my.css" type="text/css" />
+	<script type="text/javascript" src="jquery-3.7.0.min.js"></script>
+	<script type="text/javascript" src="js/my.js"></script>
+</head>
+<body>
+
+	<div class="top">
+		<div class="wrap">
+			<div class="company">Shenzhen CLOU Electronics CO.,LTD.
+			</div>
+		</div>
+
+	</div>
+	<div class="base">
+		<div class="test"> <ul>
+			<li><div class="left" id="fl1" onclick="show_div('tab.html','fl1')"><p>Network para</p></div></li>
+			<li><div class="left" id="fl2" onclick="show_div('tab2.html','fl2')"><p>Meter reading info</p></div></li>
+			<li><div class="left" id="fl3" onclick="show_div('third', 'fl3')"><p>Measure node para</p></div></li>
+			<li><div class="left" id="fl4" onclick="show_div('fourth','fl4')"><p>Terminal management</p></div></li>
+			<li><div class="left" id="fl5" onclick="show_div('fifth','fl5')"><p>Terminal upgrade</p></div></li>
+		</ul> </div>
+		<div class="right" id="first" >
+			<div class="panel"><h2>Master network para</h2>
+				<div class="bd-box newlist">
+					<ul class="list">
+						<li><span class="sp-l">Master IP</span><span class="sp-r new-sp"><input type="text" name="master_ip" id="master_ip" onblur="text_check(this)" class="inpt"></span><span class="errinfo" id="master_ip_err">format error</span></li>
+						<li><span class="sp-l">Port</span><span class="sp-r new-sp"><input type="text" name="up_ip" id="master_port" onblur="text_check(this)" class="inpt"></span><span class="errinfo" id="master_port_err">format error</span></li>
+						<li><span class="sp-l">APN</span><span class="sp-r new-sp"><input type="text" name="up_ip" id="master_apn" class="inpt"></span></li>
+						<li><span class="sp-l">Username</span><span class="sp-r new-sp"><input type="text" name="up_ip" id="user" onblur="text_check(this)" class="inpt"></span><span class="errinfo" id="user_err">format error</span></li>
+						<li><span class="sp-l">Password</span><span class="sp-r new-sp"><input type="text" name="up_ip" id="pwd" onblur="text_check(this)" class="inpt"></span><span class="errinfo" id="pwd_err">format error</span></li>
+						<li><span class="sp-l">Heartbeat cycle</span><span class="sp-r new-sp"><input type="text" name="up_ip" id="heartbeat" onblur="text_check(this)" class="inpt"></span><span class="errinfo" id="heartbeat_err">format error</span></li>
+						<li><span class="sp-l"></span><span><input type="button" class="btn s-btn" onclick="net_query()" name="" value="Query"></span>
+							<span><input type="button" class="btn s-btn" onclick="master_sub()" name="" value="Apply"></span></li>
+						</ul>
+					</div>
+				</div>
+				<div class="panel"><h2>Terminal network para</h2>
+					<div class="bd-box newlist">
+						<ul class="list">
+							<li><span class="sp-l">Terminal IP</span><span class="sp-r new-sp"><input type="text" name="up_ip" id="ter_ip1" onblur="text_check(this)" class="inpt"></span><span class="errinfo" id="ter_ip1_err">format error</span></li>
+							<li><span class="sp-l">Subnet mask</span><span class="sp-r new-sp"><input type="text" name="up_ip" id="ter_mask1" onblur="text_check(this)" class="inpt"></span><span class="errinfo" id="ter_mask1_err">format error</span></li>
+							<li><span class="sp-l">Gateway</span><span class="sp-r new-sp"><input type="text" name="up_ip" id="ter_gateway1" onblur="text_check(this)" class="inpt"></span><span class="errinfo" id="ter_gateway1_err">format error</span></li>
+							<li><span class="sp-l"></span><span><input type="button" class="btn s-btn" onclick="net_query()" name="" value="Query"></span>
+								<span><input type="button" class="btn s-btn" onclick="terminal_sub()" name="" value="Apply"></span></li>
+							</ul>
+						</div>
+					</div>
+				</div>
+
+
+
+			</div>
+
+		</body>
+		</html>
