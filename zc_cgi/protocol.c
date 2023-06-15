@@ -26,7 +26,7 @@
 #define PRO_HEART_BEAT "heart_beat"
 #define PRO_ADD_SENSOR "add_sensor"
 #define PRO_GET_BOARDS_STATUS "get_boards_status"
-
+#define PRO_POOL_STATUS "pool_status"
 
 extern int cgi_sys_update_elec_handler(connection_t *con);
 extern int cgi_sys_query_elec_handler(connection_t *con);
@@ -53,6 +53,7 @@ extern int cgi_sys_heart_beat_handler(connection_t *con);
 extern int cgi_sys_add_sensor_info_handler(connection_t *con);
 extern int cgi_sys_query_sensor_info_handler(connection_t *con);
 extern int cgi_sys_get_boards_status_handler(connection_t *con);
+extern int cgi_sys_get_pool_status_handler(connection_t *con);
 
 
 static cgi_protocol_t pro_list[] ={
@@ -68,6 +69,7 @@ static cgi_protocol_t pro_list[] ={
 	{PRO_GET_BOARDS_STATUS, cgi_sys_get_boards_status_handler},
 	{PRO_QUERY_AIR_PRESSURE, cgi_sys_query_air_pressure_handler},
 	{PRO_UPDATE_AIR_PRESSURE, cgi_sys_update_air_pressure_handler},
+	{PRO_POOL_STATUS, cgi_sys_get_pool_status_handler},
 	{NULL,NULL},
 };
 
