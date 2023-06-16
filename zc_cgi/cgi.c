@@ -864,6 +864,27 @@ out:
 	return 1;
 }
 
+int cgi_sys_img_save_handler(connection_t *con);
+{	
+
+	char *camera_id = con_value_get(con, "camera_id");
+
+	char sql[256] = {0};
+	char *errmsg = NULL;
+	if (!camera_id) {
+		cJSON_AddNumberToObject(con->response, "code", 1);
+		cJSON_AddStringToObject(con->response, "msg", "no pool_id");
+		goto out;
+	}
+	ImageMagick 
+
+	cJSON_AddNumberToObject(con->response, "code", 0);
+//	cJSON_AddItemToObject(con->response, "data", board_array);
+
+out:
+	return 1;
+}
+
 
 
 
