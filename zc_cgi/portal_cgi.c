@@ -22,14 +22,12 @@ int cgi_init()
 	}
 }
 
-typedef struct board_info{
-	char *mac;
-	const char *name;
-}board_info_t;
+
+struct list_head board_list;
 
 board_info_t board_mac[] = {
-					{"aa:aa:aa:aa:aa:aa", "no.1_pool"},
-					{"bb:bb:bb:bb:bb:bb", "no.2_pool"}
+					{"aa:aa:aa:aa:aa:aa", "no.1_pool", 0, 0},
+					{"bb:bb:bb:bb:bb:bb", "no.2_pool", 0, 0}
 					};
 
 
@@ -71,15 +69,16 @@ reply_print:
 	if (out)
 		free(out);
 */
-	v_list_init(&head);
 
+	INIT_LIST_HEAD(&board_list);
+	
 	for (int i = 0; i< sizeof(board_mac)/sizeof(board_mac[0]);i++)
 	{
-		esp32_board_t *board = malloc(sizeof(esp32_board_t));
-		memset(board, 0, sizeof(esp32_board_t));
+		board_info_t *board = malloc(sizeof(board_info_t));
+		memset(board, 0, sizeof(board));
 		strncpy(board->mac, board_mac[i].mac, sizeof(board->mac));
 		strncpy(board->name, board_mac[i].name, sizeof(board->name));
-		v_list_add(&head, board->mac, board);
+		list_add(&board->board_list, &board_list);
 	}
 	while(FCGI_Accept() >= 0)
 	{

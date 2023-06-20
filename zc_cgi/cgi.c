@@ -18,6 +18,7 @@
 
 extern sqlite3 *pdb;
 extern v_list_t head;
+extern struct list_head board_list;
 
 enum {
 
@@ -661,21 +662,76 @@ int cgi_sys_heart_beat_handler(connection_t *con)
 		cJSON_AddStringToObject(con->response, "msg", "no client_mac");
 		goto out;
 	}
-	char *board = v_list_get(&head, client_mac);
-	if (board != NULL)
-	{
-		((esp32_board_t *)board)->is_online = 1;
-		((esp32_board_t *)board)->last_heart_beat_time = uptime();
-		cJSON_AddNumberToObject(con->response, "code", 0);
-	}else
-	{
-		cJSON_AddNumberToObject(con->response, "code", 1);
-		cJSON_AddStringToObject(con->response, "msg", "no board_info");
+	board_info_t *p = NULL;
+	task_info_t *task = NULL;
+	cJSON *array = NULL, item = NULL;
+	list_for_each_entry(p, &board_list, board_list) {
+		if (strcmp(p->mac, client) == 0) {
+			p->last_heart_beat_time = uptime();
+			if (!list_empty(&p->task_list)) {
+				array = cJSON_CreateArray();
+				list_for_each_entry(task, &p->task_list, task_list) {
+					if (!task->has_been_sent){
+						item = cJSON_CreateObject();
+						cJSON_AddStringToObject(item, "task_name", task->task_name);
+						cJSON_AddNumberToObject(item, "task_id", task->task_id);
+						cJSON_AddNumberToObject(item, "report_interval", task->task_report_interval);
+						cJSON_AddStringToObject(item, "task_param", task->other_param);
+						cJSON_AddItemToArray(array, item);
+						task->has_been_sent = 1;
+					}
+				}
+			}
+			break;
+		}
+	}
+	cJSON_AddNumberToObject(con->response, "code", 0);
+	if (array != NULL) {
+		cJSON_AddItemToObject(con->response, "task", array);
 	}
 
 out:
 	return 1;
 }
+
+int cgi_sys_task_result_handler(connection_t *con)
+{	
+	char *client_mac = con_value_get(con, "client_mac");
+	char *task_name = con_value_get(con, "task_name");
+	char *task_id = con_value_get(con, "task_id");
+	char *task_result = con_value_get(con, "task_result");
+	if (!client_mac || !task_name || !task_id || !task_result) {
+		cJSON_AddNumberToObject(con->response, "code", 1);
+		cJSON_AddStringToObject(con->response, "msg", "param error");
+		goto out;
+	}
+	board_info_t *p = NULL;
+	task_info_t *task = NULL, *task2 = NULL;
+	list_for_each_entry(p, &board_list, board_list) {
+		if (strcmp(p->mac, client) == 0) {
+			if (!list_empty(&p->task_list)) {
+				list_for_each_entry_safe(task, task2, &p->task_list, task_list) {
+					if (strcmp(task->task_name, task_name) == 0 && strcmp(task->task_id, task_id) == 0) {
+						list_del(&task->task_list);
+						free(task);
+						if (strcmp(task_result, "success") == 0)
+						{
+
+						}
+						break;
+					}				
+				}
+			}
+			break;
+		}
+	}
+	
+	cJSON_AddNumberToObject(con->response, "code", 0);
+
+out:
+	return 1;
+}
+
 
 int cgi_sys_add_sensor_info_handler(connection_t *con)
 {	

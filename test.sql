@@ -14,6 +14,8 @@ create table `sensor_info`(
 	`type` int(4),
 	`pool_id`  int(4),
 	`add_time` 	timestamp NOT NULL DEFAULT (datetime('now','localtime')),
+	`report_interval`	int(8),
+	`other_param`	varchar(32),
 	`description`	varchar(64)
 )
 
