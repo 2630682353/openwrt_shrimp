@@ -568,7 +568,7 @@ int cgi_sys_update_temper_handler(connection_t *con)
 	/*snprintf(sql, sizeof(sql) - 1, "INSERT INTO `temper` (client_mac, client_temper_index, temper) "
 		"VALUES(\"%s\",%s,\"%s\");", client_mac, client_temper_index, temper);*/
 
-	snprintf(sql, sizeof(sql) - 1, "INSERT INTO `temper` (client_mac, client_temper_index, temper, pool_id) "
+	snprintf(sql, sizeof(sql) - 1, "INSERT INTO `temper` (client_mac, sensor_pin, temper, pool_id) "
 		"select \"%s\",%s,\"%s\", pool_id from sensor_info where client_mac=%s and sensor_pin=%s;", 
 		client_mac, client_temper_index, temper, client_mac, client_temper_index);
 	if(SQLITE_OK != sqlite3_exec(pdb,sql,NULL,NULL,&errmsg))
@@ -605,6 +605,22 @@ int cgi_sys_update_elec_handler(connection_t *con)
 out:
 	return 1;
 }
+
+int cgi_sys_update_feed_handler(connection_t *con)
+{	
+	char *feed = con_value_get(con, "feed");
+	if (!feed) {
+		cJSON_AddNumberToObject(con->response, "code", 1);
+		cJSON_AddStringToObject(con->response, "msg", "no feed");
+		goto out;
+	}
+
+	cJSON_AddNumberToObject(con->response, "code", 0);
+
+out:
+	return 1;
+}
+
 int cgi_sys_query_temper_handler(connection_t *con)
 {	
 	char *period = con_value_get(con, "period");
@@ -666,7 +682,7 @@ int cgi_sys_heart_beat_handler(connection_t *con)
 	task_info_t *task = NULL;
 	cJSON *array = NULL, item = NULL;
 	list_for_each_entry(p, &board_list, board_list) {
-		if (strcmp(p->mac, client) == 0) {
+		if (strcmp(p->mac, client_mac) == 0) {
 			p->last_heart_beat_time = uptime();
 			if (!list_empty(&p->task_list)) {
 				array = cJSON_CreateArray();
@@ -694,6 +710,58 @@ out:
 	return 1;
 }
 
+int cgi_sys_add_task_handler(connection_t *con)
+{	
+	char *client_mac = con_value_get(con, "client_mac");
+	char *sensor_pin = con_value_get(con, "sensor_pin");
+	char *sensor_type = con_value_get(con, "sensor_type");
+	char *report_interval = con_value_get(con, "report_interval");
+	char *other_param = con_value_get(con, "other_param");
+	if (!client_mac) {
+		cJSON_AddNumberToObject(con->response, "code", 1);
+		cJSON_AddStringToObject(con->response, "msg", "no client_mac");
+		goto out;
+	}
+	board_info_t *p = NULL;
+	task_info_t *task = NULL;
+	char sql[256] = {0};
+	cJSON *array = NULL, item = NULL;
+	list_for_each_entry(p, &board_list, board_list) {
+		if (strcmp(p->mac, client_mac) == 0) {
+			if (uptime() - p->last_heart_beat_time > 600)
+			{
+				snprintf(sql, sizeof(sql) - 1, "replace into `sensor_info` (client_mac, sensor_pin, temper, pool_id) "
+					"select \"%s\",%s,\"%s\", pool_id from sensor_info where client_mac=%s and sensor_pin=%s;", 
+					client_mac, client_temper_index, temper, client_mac, client_temper_index);
+				
+			}
+			if (!list_empty(&p->task_list)) {
+				array = cJSON_CreateArray();
+				list_for_each_entry(task, &p->task_list, task_list) {
+					if (!task->has_been_sent){
+						item = cJSON_CreateObject();
+						cJSON_AddStringToObject(item, "task_name", task->task_name);
+						cJSON_AddNumberToObject(item, "task_id", task->task_id);
+						cJSON_AddNumberToObject(item, "report_interval", task->task_report_interval);
+						cJSON_AddStringToObject(item, "task_param", task->other_param);
+						cJSON_AddItemToArray(array, item);
+						task->has_been_sent = 1;
+					}
+				}
+			}
+			break;
+		}
+	}
+	cJSON_AddNumberToObject(con->response, "code", 0);
+	if (array != NULL) {
+		cJSON_AddItemToObject(con->response, "task", array);
+	}
+
+out:
+	return 1;
+}
+
+
 int cgi_sys_task_result_handler(connection_t *con)
 {	
 	char *client_mac = con_value_get(con, "client_mac");
@@ -716,6 +784,17 @@ int cgi_sys_task_result_handler(connection_t *con)
 						free(task);
 						if (strcmp(task_result, "success") == 0)
 						{
+							char sql[256] = {0};
+							char *errmsg = NULL;
+							snprintf(sql, sizeof(sql) - 1, "update set `air_pressure` (client_mac, client_pressure_index, pressure) "
+								"VALUES(\"%s\",%s,\"%s\");", client_mac, client_pressure_index, pressure);
+							if(SQLITE_OK != sqlite3_exec(pdb,sql,NULL,NULL,&errmsg))
+							{
+								CGI_LOG(LOG_ERR, "insert record fail!%s\n",errmsg);
+								cJSON_AddNumberToObject(con->response, "code", 1);
+								cJSON_AddStringToObject(con->response, "msg", errmsg);
+								goto out;
+							}
 
 						}
 						break;
@@ -874,6 +953,33 @@ out:
 }
 
 
+int cgi_sys_board_start_handler(connection_t *con)
+{	
+	char *client_mac = con_value_get(con, "client_mac");
+
+	char sql[256] = {0};
+	char *errmsg = NULL;
+	if (!client_mac) {
+		cJSON_AddNumberToObject(con->response, "code", 1);
+		cJSON_AddStringToObject(con->response, "msg", "no client_mac or client_mac=all");
+		goto out;
+	}
+	cJSON *array = cJSON_CreateArray();
+	snprintf(sql, sizeof(sql), "select * from sensor_info where client_mac='%s';", client_mac);
+	if(SQLITE_OK != sqlite3_exec(pdb, sql, query_data_to_json,(void *)array, &errmsg))
+	{
+			CGI_LOG(LOG_ERR, "queray fail!%s\n",errmsg);
+			cJSON_AddNumberToObject(con->response, "code", 1);
+			cJSON_AddStringToObject(con->response, "msg", errmsg);
+			goto out;
+	}
+	cJSON_AddNumberToObject(con->response, "code", 0);
+	cJSON_AddItemToObject(con->response, "data", array);
+out:
+	return 1;
+}
+
+
 int cgi_sys_get_boards_status_handler(connection_t *con)
 {	
 
@@ -904,13 +1010,45 @@ int cgi_sys_get_pool_status_handler(connection_t *con)
 {	
 
 	char *pool_id = con_value_get(con, "pool_id");
+	char *period = con_value_get(con, "period");
 
 	char sql[256] = {0};
 	char *errmsg = NULL;
-	if (!pool_id) {
+	if (!pool_id || !period) {
 		cJSON_AddNumberToObject(con->response, "code", 1);
 		cJSON_AddStringToObject(con->response, "msg", "no pool_id");
 		goto out;
+	}
+	cJSON *array = cJSON_CreateArray();
+	if (strcmp(period, "recent") == 0)
+	{
+		snprintf(sql, sizeof(sql) - 1, "select * from `temper` where capture_time between datetime('now','-1 days', '+1 seconds') "
+			"and  datetime('now','-1 seconds') and pool_id=%s", pool_id);
+		if(SQLITE_OK != sqlite3_exec(pdb, sql, query_data_to_json,(void *)array, &errmsg))
+		{
+				CGI_LOG(LOG_ERR, "queray fail!%s\n",errmsg);
+				goto error_out;
+		}
+		cJSON_AddItemToObject(con->response, "temper", array);
+		array = cJSON_CreateArray();
+		snprintf(sql, sizeof(sql) - 1, "select * from `water_level` where capture_time between datetime('now','-1 days', '+1 seconds') "
+			"and  datetime('now','-1 seconds') and pool_id=%s", pool_id);
+		if(SQLITE_OK != sqlite3_exec(pdb, sql, query_data_to_json,(void *)array, &errmsg))
+		{
+				CGI_LOG(LOG_ERR, "queray fail!%s\n",errmsg);
+				goto error_out;
+		}
+		cJSON_AddItemToObject(con->response, "water_level", array);
+		array = cJSON_CreateArray();
+		snprintf(sql, sizeof(sql) - 1, "select * from `temper` where capture_time between datetime('now','-1 days', '+1 seconds') "
+			"and  datetime('now','-1 seconds') and pool_id=%s", pool_id);
+		if(SQLITE_OK != sqlite3_exec(pdb, sql, query_data_to_json,(void *)array, &errmsg))
+		{
+				CGI_LOG(LOG_ERR, "queray fail!%s\n",errmsg);
+				goto error_out;
+		}
+		cJSON_AddItemToObject(con->response, "water_level", array);
+		
 	}
 
 	cJSON_AddNumberToObject(con->response, "code", 0);
@@ -918,6 +1056,11 @@ int cgi_sys_get_pool_status_handler(connection_t *con)
 
 out:
 	return 1;
+error_out:
+	cJSON_AddNumberToObject(con->response, "code", 1);
+	cJSON_AddStringToObject(con->response, "msg", errmsg);
+	return 1;
+	
 }
 
 int cgi_sys_img_save_handler(connection_t *con);
