@@ -23,11 +23,17 @@
 #define PRO_QUERY_TRANSPARENT "query_transparent"
 
 #define PRO_QUERY_SENSOR  "query_sensor"
+#define PRO_QUERY_SENSOR_REAL  "query_sensor_real"
+
 #define PRO_HEART_BEAT "heart_beat"
 #define PRO_ADD_SENSOR "add_sensor"
 #define PRO_GET_BOARDS_STATUS "get_boards_status"
 #define PRO_POOL_STATUS "pool_status"
 #define PRO_IMG_SAVE "img_save"
+#define PRO_BOARD_START "board_start"
+#define PRO_REPORT_BOARD_SENSOR "report_board_sensor"
+#define PRO_ADD_TASK "add_task"
+#define PRO_TASK_RESULT "task_result"
 
 extern int cgi_sys_update_elec_handler(connection_t *con);
 extern int cgi_sys_query_elec_handler(connection_t *con);
@@ -53,10 +59,17 @@ extern int cgi_sys_query_light_lux_handler(connection_t *con);
 extern int cgi_sys_heart_beat_handler(connection_t *con);
 extern int cgi_sys_add_sensor_info_handler(connection_t *con);
 extern int cgi_sys_query_sensor_info_handler(connection_t *con);
+extern int cgi_sys_query_sensor_info_real_handler(connection_t *con);
+
+
 extern int cgi_sys_get_boards_status_handler(connection_t *con);
 extern int cgi_sys_get_pool_status_handler(connection_t *con);
 
 extern int cgi_sys_img_save_handler(connection_t *con);
+extern int cgi_sys_board_start_handler(connection_t *con);
+extern int cgi_board_report_board_sensor_info(connection_t *con);
+extern int cgi_sys_add_task_handler(connection_t *con);
+extern int cgi_sys_task_result_handler(connection_t *con);
 
 
 
@@ -70,11 +83,16 @@ static cgi_protocol_t pro_list[] ={
 	{PRO_HEART_BEAT, cgi_sys_heart_beat_handler},
 	{PRO_ADD_SENSOR, cgi_sys_add_sensor_info_handler},
 	{PRO_QUERY_SENSOR, cgi_sys_query_sensor_info_handler},
+	{PRO_QUERY_SENSOR_REAL, cgi_sys_query_sensor_info_real_handler},
 	{PRO_GET_BOARDS_STATUS, cgi_sys_get_boards_status_handler},
 	{PRO_QUERY_AIR_PRESSURE, cgi_sys_query_air_pressure_handler},
 	{PRO_UPDATE_AIR_PRESSURE, cgi_sys_update_air_pressure_handler},
 	{PRO_POOL_STATUS, cgi_sys_get_pool_status_handler},
 	{PRO_IMG_SAVE, cgi_sys_img_save_handler},
+	{PRO_BOARD_START, cgi_sys_board_start_handler},
+	{PRO_REPORT_BOARD_SENSOR, cgi_board_report_board_sensor_info},
+	{PRO_ADD_TASK, cgi_sys_add_task_handler},
+	{PRO_TASK_RESULT, cgi_sys_task_result_handler},
 	{NULL,NULL},
 };
 

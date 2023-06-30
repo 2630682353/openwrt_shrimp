@@ -41,6 +41,8 @@ typedef struct task_info{
 	int task_id;
 	int has_been_sent;
 	int task_report_interval;
+	int sensor_pin;
+	int sensor_type;
 	char other_param[32];
 	struct list_head task_list;
 }task_info_t;
