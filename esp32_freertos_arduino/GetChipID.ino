@@ -1,21 +1,74 @@
+#include <dummy.h>
+
+#include <AsyncUDP.h>
+
 #include <WiFi.h>
 
 const char* ssid     = "zc_test";
 const char* password = "58285390";
 
 const char* host = "192.168.10.103";
+const int httpPort = 80;
 const char* streamId   = "....................";
 const char* privateKey = "....................";
+int wifi_connect_times = 20;
+int http_connect_times = 10;
+int http_send(String url, String &out)
+{
+  Serial.println("int http send");
+  // Use WiFiClient class to create TCP connections
+  WiFiClient client;
+  const int httpPort = 80;
+  
+  if (!client.connect(host, httpPort)) {
+      http_connect_times--;
+      Serial.println("connection failed");
+      return -1;
+      
+  }
+
+  // We now create a URI for the request
+  
+  Serial.print("Requesting URL: ");
+  Serial.println(url);
+  // This will send the request to the server
+  client.print(String("GET ") + url + " HTTP/1.1\r\n" +
+              "Host: " + host + "\r\n" +
+              "Connection: close\r\n\r\n");
+  unsigned long timeout = millis();
+  while (client.available() == 0) {
+      vTaskDelay(500);
+      if (millis() - timeout > 5000) {
+          Serial.println(">>> Client Timeout !");
+          client.stop();
+          return -2;
+      }
+  }
+
+  // Read all the lines of the reply from server and print them to Serial
+  while(client.available()) {
+      String line = client.readStringUntil('\r');
+      out = line;
+  }
+
+  Serial.println();
+  Serial.println("closing connection");
+}
 
 void main_task( void * parameter )
 {
     vTaskDelay(10);
+    wifi_connect_times = 20;
+    http_connect_times = 10;
     Serial.print("Connecting to ");
     Serial.println(ssid);
     WiFi.begin(ssid, password);
 
     while (WiFi.status() != WL_CONNECTED) {
-        delay(500);
+        wifi_connect_times--;
+        vTaskDelay(500);
+        if (wifi_connect_times < 0)
+          return;
         Serial.print(".");
     }
 
@@ -23,43 +76,14 @@ void main_task( void * parameter )
     Serial.println("WiFi connected");
     Serial.println("IP address: ");
     Serial.println(WiFi.localIP());
+    String url = "/portal_cgi?opt=query_temper&client_mac=all&period=recent&client_temper_index=all";
+    String out = "";
     while(1)
     {
-      // Use WiFiClient class to create TCP connections
-      WiFiClient client;
-      const int httpPort = 80;
-      if (!client.connect(host, httpPort)) {
-          Serial.println("connection failed");
-          return;
-      }
-
-      // We now create a URI for the request
-      String url = "/portal_cgi?opt=query_temper&client_mac=all&period=recent&client_temper_index=all";
-      Serial.print("Requesting URL: ");
-      Serial.println(url);
-      // This will send the request to the server
-      client.print(String("GET ") + url + " HTTP/1.1\r\n" +
-                  "Host: " + host + "\r\n" +
-                  "Connection: close\r\n\r\n");
-      unsigned long timeout = millis();
-      while (client.available() == 0) {
-          if (millis() - timeout > 5000) {
-              Serial.println(">>> Client Timeout !");
-              client.stop();
-              return;
-          }
-      }
-
-      // Read all the lines of the reply from server and print them to Serial
-      while(client.available()) {
-          String line = client.readStringUntil('\r');
-          Serial.print(line);
-      }
-
-      Serial.println();
-      Serial.println("closing connection");
+      http_send(url, out);
+      Serial.println("out:"+ out);
       vTaskDelay(5000);
-    }
+    }  
 }
  
   
