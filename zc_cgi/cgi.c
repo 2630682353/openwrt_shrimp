@@ -526,7 +526,7 @@ int cgi_sys_query_air_pressure_handler(connection_t *con)
 	}
 	if (strcmp(sensor_pin, "all") != 0)
 	{
-		snprintf(condition, sizeof(condition), " and client_pressure_index=%s ", client_pressure_index);
+		snprintf(condition, sizeof(condition), " and client_pressure_index=%s ", sensor_pin);
 	}
 	if (strcmp(period, "recent") == 0)
 	{
