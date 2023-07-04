@@ -608,6 +608,68 @@ out:
 	return 1;
 }
 
+int cgi_sys_query_elec_handler(connection_t *con)
+{	
+	char *period = con_value_get(con, "period");
+	char *client_mac = con_value_get(con, "client_mac");
+	char *client_temper_index = con_value_get(con, "client_temper_index");
+	if (!elec) {
+		cJSON_AddNumberToObject(con->response, "code", 1);
+		cJSON_AddStringToObject(con->response, "msg", "no elec");
+		goto out;
+	}
+
+	
+//	if (cgi_snd_msg(MSG_CMD_MANAGE_STOP_APP, app, strlen(app) + 1, NULL, NULL) == 0) {
+	cJSON_AddNumberToObject(con->response, "code", 0);
+//	} else {
+//		cJSON_AddNumberToObject(con->response, "code", 1);
+//	}
+out:
+	return 1;
+}
+
+int cgi_sys_update_water_level_handler(connection_t *con)
+{	
+	char *elec = con_value_get(con, "elec");
+	if (!elec) {
+		cJSON_AddNumberToObject(con->response, "code", 1);
+		cJSON_AddStringToObject(con->response, "msg", "no elec");
+		goto out;
+	}
+
+	
+//	if (cgi_snd_msg(MSG_CMD_MANAGE_STOP_APP, app, strlen(app) + 1, NULL, NULL) == 0) {
+	cJSON_AddNumberToObject(con->response, "code", 0);
+//	} else {
+//		cJSON_AddNumberToObject(con->response, "code", 1);
+//	}
+out:
+	return 1;
+}
+
+int cgi_sys_query_water_level_handler(connection_t *con)
+{	
+	char *period = con_value_get(con, "period");
+	char *client_mac = con_value_get(con, "client_mac");
+	char *client_temper_index = con_value_get(con, "client_temper_index");
+	if (!elec) {
+		cJSON_AddNumberToObject(con->response, "code", 1);
+		cJSON_AddStringToObject(con->response, "msg", "no elec");
+		goto out;
+	}
+
+	
+//	if (cgi_snd_msg(MSG_CMD_MANAGE_STOP_APP, app, strlen(app) + 1, NULL, NULL) == 0) {
+	cJSON_AddNumberToObject(con->response, "code", 0);
+//	} else {
+//		cJSON_AddNumberToObject(con->response, "code", 1);
+//	}
+out:
+	return 1;
+}
+
+
 int cgi_sys_update_feed_handler(connection_t *con)
 {	
 	char *feed = con_value_get(con, "feed");
@@ -801,6 +863,53 @@ int cgi_sys_add_sensor_info_handler(connection_t *con)
 	char *sensor_type = con_value_get(con, "sensor_type");
 	char *sensor_pin = con_value_get(con, "sensor_pin");
 	char *pool_id = con_value_get(con, "pool_id");
+	char *report_interval = con_value_get(con, "report_interval");
+	char *other_param = con_value_get(con, "other_param");
+	char sql[256] = {0};
+	char *errmsg = NULL;
+	if (!client_mac || !sensor_pin || !sensor_type) {
+		cJSON_AddNumberToObject(con->response, "code", 1);
+		cJSON_AddStringToObject(con->response, "msg", "no client_mac or no board_name");
+		goto out;
+	}
+
+	snprintf(sql, sizeof(sql), "select count(*) from sensor_info where client_mac='%s' and sensor_pin=%s;",
+	client_mac, sensor_pin);
+	if (query_table(sql, 0,0) > 0)
+	{
+		cJSON_AddNumberToObject(con->response, "code", 1);
+		cJSON_AddStringToObject(con->response, "msg", "sensor pin exist");
+		goto out;
+	}else
+	{
+		
+		snprintf(sql, sizeof(sql) - 1, "INSERT INTO `sensor_info` (client_mac, sensor_pin, type, pool_id, report_interval, other_param) "
+			"VALUES('%s',%d, %d, %d,%d, '%s');", client_mac, atoi(sensor_pin), atoi(sensor_type), atoi(pool_id), atoi(report_interval), other_param);
+		if(SQLITE_OK != sqlite3_exec(pdb,sql,NULL,NULL,&errmsg))
+		{
+				CGI_LOG(LOG_ERR, "insert record fail!%s\n",errmsg);
+				cJSON_AddNumberToObject(con->response, "code", 1);
+				cJSON_AddStringToObject(con->response, "msg", errmsg);
+				goto out;
+		}
+	}
+	cJSON_AddNumberToObject(con->response, "code", 0);
+//	}
+
+out:
+	return 1;
+}
+
+int cgi_sys_update_sensor_info_handler(connection_t *con)
+{	
+	//char *sensor_id = con_value_get(con, "sensor_id");
+	char *client_mac = con_value_get(con, "client_mac");
+	//char *board_name = con_value_get(con, "board_name");
+	char *sensor_type = con_value_get(con, "sensor_type");
+	char *sensor_pin = con_value_get(con, "sensor_pin");
+	char *pool_id = con_value_get(con, "pool_id");
+	char *report_interval = con_value_get(con, "report_interval");
+	char *other_param = con_value_get(con, "other_param");
 	char sql[256] = {0};
 	char *errmsg = NULL;
 	if (!client_mac || !sensor_pin || !sensor_type) {
@@ -823,82 +932,16 @@ int cgi_sys_add_sensor_info_handler(connection_t *con)
 		v_list_add(&head, board->mac, board);
 		cJSON_AddNumberToObject(con->response, "code", 0);
 		*/
-	snprintf(sql, sizeof(sql), "select count(*) from sensor_info where client_mac='%s' and sensor_pin=%s;",
-	client_mac, sensor_pin);
-	if (query_table(sql, 0,0) > 0)
+	
+	snprintf(sql, sizeof(sql) - 1, "update `sensor_info` set type=%d, pool_id=%d, report_interval=%d, other_param=%s where "
+		"client_mac='%s' and sensor_pin=%d;", atoi(sensor_type),  atoi(pool_id),  atoi(report_interval), 
+		other_param,client_mac, atoi(sensor_pin));
+	if(SQLITE_OK != sqlite3_exec(pdb,sql,NULL,NULL,&errmsg))
 	{
-		cJSON_AddNumberToObject(con->response, "code", 1);
-		cJSON_AddStringToObject(con->response, "msg", "sensor pin exist");
-		goto out;
-	}else
-	{
-		
-		snprintf(sql, sizeof(sql) - 1, "INSERT INTO `sensor_info` (client_mac, sensor_pin, type, pool_id) "
-			"VALUES(\"%s\",%d,\"%d\",\"%d\");", client_mac, atoi(sensor_pin), atoi(sensor_type), atoi(pool_id));
-		if(SQLITE_OK != sqlite3_exec(pdb,sql,NULL,NULL,&errmsg))
-		{
-				CGI_LOG(LOG_ERR, "insert record fail!%s\n",errmsg);
-				cJSON_AddNumberToObject(con->response, "code", 1);
-				cJSON_AddStringToObject(con->response, "msg", errmsg);
-				goto out;
-		}
-	}
-	cJSON_AddNumberToObject(con->response, "code", 0);
-//	}
-
-out:
-	return 1;
-}
-
-int cgi_sys_update_sensor_info_handler(connection_t *con)
-{	
-	char *sensor_id = con_value_get(con, "sensor_id");
-	char *client_mac = con_value_get(con, "client_mac");
-	//char *board_name = con_value_get(con, "board_name");
-	char *sensor_type = con_value_get(con, "sensor_type");
-	char *sensor_pin = con_value_get(con, "sensor_pin");
-	char *pool_id = con_value_get(con, "pool_id");
-	char sql[256] = {0};
-	char *errmsg = NULL;
-	if (!client_mac || !sensor_pin || !sensor_type || !sensor_id) {
-		cJSON_AddNumberToObject(con->response, "code", 1);
-		cJSON_AddStringToObject(con->response, "msg", "no client_mac or no board_name");
-		goto out;
-	}
-//	char *board = v_list_get(&head, client_mac);
-//	if (board != NULL)
-//	{
-//		cJSON_AddNumberToObject(con->response, "code", 1);
-//		cJSON_AddStringToObject(con->response, "msg", "board_info exist");
-//	}else
-//	{
-	/*
-
-		esp32_board_t *board = malloc(sizeof(esp32_board_t));
-		strncpy(board->mac, client_mac, sizeof(board->mac));
-		strncpy(board->name, board_name, sizeof(board->name));
-		v_list_add(&head, board->mac, board);
-		cJSON_AddNumberToObject(con->response, "code", 0);
-		*/
-	snprintf(sql, sizeof(sql), "select count(*) from sensor_info where client_mac='%s' and sensor_pin=%s;",
-	client_mac, sensor_pin);
-	if (query_table(sql, 0,0) > 0)
-	{
-		cJSON_AddNumberToObject(con->response, "code", 1);
-		cJSON_AddStringToObject(con->response, "msg", "sensor pin exist");
-		goto out;
-	}else
-	{
-		
-		snprintf(sql, sizeof(sql) - 1, "INSERT INTO `sensor_info` (client_mac, sensor_pin, type, pool_id) "
-			"VALUES(\"%s\",%d,\"%d\",\"%d\");", client_mac, atoi(sensor_pin), atoi(sensor_type), atoi(pool_id));
-		if(SQLITE_OK != sqlite3_exec(pdb,sql,NULL,NULL,&errmsg))
-		{
-				CGI_LOG(LOG_ERR, "insert record fail!%s\n",errmsg);
-				cJSON_AddNumberToObject(con->response, "code", 1);
-				cJSON_AddStringToObject(con->response, "msg", errmsg);
-				goto out;
-		}
+			CGI_LOG(LOG_ERR, "update record fail!%s\n",errmsg);
+			cJSON_AddNumberToObject(con->response, "code", 1);
+			cJSON_AddStringToObject(con->response, "msg", errmsg);
+			goto out;
 	}
 	cJSON_AddNumberToObject(con->response, "code", 0);
 //	}
