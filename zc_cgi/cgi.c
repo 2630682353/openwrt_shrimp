@@ -512,7 +512,7 @@ int cgi_sys_query_air_pressure_handler(connection_t *con)
 	char *period = con_value_get(con, "period");
 	char *client_mac = con_value_get(con, "client_mac");
 	char *sensor_pin = con_value_get(con, "sensor_pin");
-	if (!period || !client_mac || !client_pressure_index) {
+	if (!period || !client_mac || !sensor_pin) {
 		cJSON_AddNumberToObject(con->response, "code", 1);
 		cJSON_AddStringToObject(con->response, "msg", "param not right");
 		goto out;
@@ -776,7 +776,7 @@ int cgi_sys_task_result_handler(connection_t *con)
 		if (strcmp(p->mac, client_mac) == 0) {
 			if (!list_empty(&p->task_list)) {
 				list_for_each_entry_safe(task, task2, &p->task_list, task_list) {
-					if (strcmp(task->task_name, task_name) == 0 && strcmp(task->task_id, task_id) == 0) {
+					if (strcmp(task->task_name, task_name) == 0 && task->task_id == task_id) {
 						list_del(&task->task_list);
 						free(task);
 						break;
