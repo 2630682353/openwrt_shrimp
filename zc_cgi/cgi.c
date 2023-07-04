@@ -559,8 +559,8 @@ int cgi_sys_update_temper_handler(connection_t *con)
 {	
 	char *temper = con_value_get(con, "temper");
 	char *client_mac = con_value_get(con, "client_mac");
-	char *client_temper_index = con_value_get(con, "client_temper_index");
-	if (!temper || !client_mac || !client_temper_index) {
+	char *sensor_pin = con_value_get(con, "sensor_pin");
+	if (!temper || !client_mac || !sensor_pin) {
 		cJSON_AddNumberToObject(con->response, "code", 1);
 		cJSON_AddStringToObject(con->response, "msg", "param not right");
 		goto out;
@@ -572,7 +572,7 @@ int cgi_sys_update_temper_handler(connection_t *con)
 
 	snprintf(sql, sizeof(sql) - 1, "INSERT INTO `temper` (client_mac, sensor_pin, temper, pool_id) "
 		"select \"%s\",%s,\"%s\", pool_id from sensor_info where client_mac=%s and sensor_pin=%s;", 
-		client_mac, client_temper_index, temper, client_mac, client_temper_index);
+		client_mac, sensor_pin, temper, client_mac, sensor_pin);
 	if(SQLITE_OK != sqlite3_exec(pdb,sql,NULL,NULL,&errmsg))
 	{
 			CGI_LOG(LOG_ERR, "insert record fail!%s\n",errmsg);

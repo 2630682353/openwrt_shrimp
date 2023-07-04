@@ -92,6 +92,21 @@ int http_send(String url, String &out)
 
   Serial.println();
   Serial.println("closing connection");
+  return 0;
+}
+
+int get_board_sensor_info()
+{
+	String sensor_json = "";
+	if (http_send("/portal_cgi?opt=query_sensor&client_mac=all", sensor_json) == 0)
+	{
+		DynamicJsonDocument doc(1024);
+		deserializeJson(doc, sensor_json);
+		int sensor_pin = doc["data"][0]["sensor_pin"];
+		
+	}
+
+
 }
 
 void main_task( void * parameter )
