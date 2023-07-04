@@ -19,6 +19,7 @@
 extern sqlite3 *pdb;
 extern v_list_t head;
 extern struct list_head board_list;
+char *errmsg = NULL;
 
 enum {
 
@@ -104,6 +105,7 @@ int query_data_to_json(void *para,int ncol,char *col_val[],char ** col_name)
 	return 0;
 }
 
+#if 0
 int http_send(char *url, cJSON *send, cJSON **recv, char *http_headers[])
 {
 	int ret = -1;
@@ -477,7 +479,7 @@ int cgi_sys_stop_app_handler(connection_t *con)
 out:
 	return 1;
 }
-
+#endif
 int cgi_sys_update_air_pressure_handler(connection_t *con)
 {	
 	char *pressure = con_value_get(con, "pressure");
@@ -509,7 +511,7 @@ int cgi_sys_query_air_pressure_handler(connection_t *con)
 {	
 	char *period = con_value_get(con, "period");
 	char *client_mac = con_value_get(con, "client_mac");
-	char *client_pressure_index = con_value_get(con, "client_pressure_index");
+	char *sensor_pin = con_value_get(con, "sensor_pin");
 	if (!period || !client_mac || !client_pressure_index) {
 		cJSON_AddNumberToObject(con->response, "code", 1);
 		cJSON_AddStringToObject(con->response, "msg", "param not right");
@@ -522,7 +524,7 @@ int cgi_sys_query_air_pressure_handler(connection_t *con)
 	{
 		snprintf(condition, sizeof(condition), " and client_mac='%s' ", client_mac);
 	}
-	if (strcmp(client_temper_index, "all") != 0)
+	if (strcmp(sensor_pin, "all") != 0)
 	{
 		snprintf(condition, sizeof(condition), " and client_pressure_index=%s ", client_pressure_index);
 	}
@@ -680,7 +682,7 @@ int cgi_sys_heart_beat_handler(connection_t *con)
 	}
 	board_info_t *p = NULL;
 	task_info_t *task = NULL;
-	cJSON *array = NULL, item = NULL;
+	cJSON *array = NULL, *item = NULL;
 	list_for_each_entry(p, &board_list, board_list) {
 		if (strcmp(p->mac, client_mac) == 0) {
 			p->last_heart_beat_time = uptime();
@@ -725,7 +727,7 @@ int cgi_sys_add_task_handler(connection_t *con)
 	board_info_t *p = NULL;
 	task_info_t *task = NULL;
 	char sql[256] = {0};
-	cJSON *array = NULL, item = NULL;
+	cJSON *array = NULL, *item = NULL;
 	list_for_each_entry(p, &board_list, board_list) {
 		if (strcmp(p->mac, client_mac) == 0) {
 			snprintf(sql, sizeof(sql) - 1, "update  `sensor_info` set report_interval=%s, other_param='%s' "
@@ -771,7 +773,7 @@ int cgi_sys_task_result_handler(connection_t *con)
 	board_info_t *p = NULL;
 	task_info_t *task = NULL, *task2 = NULL;
 	list_for_each_entry(p, &board_list, board_list) {
-		if (strcmp(p->mac, client) == 0) {
+		if (strcmp(p->mac, client_mac) == 0) {
 			if (!list_empty(&p->task_list)) {
 				list_for_each_entry_safe(task, task2, &p->task_list, task_list) {
 					if (strcmp(task->task_name, task_name) == 0 && strcmp(task->task_id, task_id) == 0) {
@@ -1007,7 +1009,7 @@ int cgi_board_report_board_sensor_info(connection_t *con)
 		goto out;
 	}
 	cJSON *sensor_array = cJSON_GetObjectItem(root, "sensor_array");
-	cJSON *array_item = NULL, item = NULL;
+	cJSON *array_item = NULL, *item = NULL;
 	int sensor_num = cJSON_GetArraySize(sensor_array);
 	for (int i=0; i < sensor_num; i++)
 	{
@@ -1046,16 +1048,6 @@ int cgi_sys_get_boards_status_handler(connection_t *con)
 	cJSON *board_array, *item;
 
 	board_array = cJSON_CreateArray();
-	
-	for(p = head.next; p; p = q) {
-		item = cJSON_CreateObject();
-		cJSON_AddStringToObject(item, "mac", ((esp32_board_t *)p->value)->mac);
-		cJSON_AddStringToObject(item, "name", ((esp32_board_t *)p->value)->name);
-		cJSON_AddNumberToObject(item, "is_online", ((esp32_board_t *)p->value)->is_online);
-		cJSON_AddItemToArray(board_array, item);
-		q = p->next;
-	}
-
 	
 	cJSON_AddNumberToObject(con->response, "code", 0);
 	cJSON_AddItemToObject(con->response, "data", board_array);
@@ -1121,7 +1113,7 @@ error_out:
 	
 }
 
-int cgi_sys_img_save_handler(connection_t *con);
+int cgi_sys_img_save_handler(connection_t *con)
 {	
 
 	char *camera_id = con_value_get(con, "camera_id");
@@ -1133,7 +1125,7 @@ int cgi_sys_img_save_handler(connection_t *con);
 		cJSON_AddStringToObject(con->response, "msg", "no pool_id");
 		goto out;
 	}
-	ImageMagick 
+	int ImageMagick; 
 
 	cJSON_AddNumberToObject(con->response, "code", 0);
 //	cJSON_AddItemToObject(con->response, "data", board_array);
