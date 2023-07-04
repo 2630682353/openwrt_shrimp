@@ -1,12 +1,4 @@
-<script type="text/javascript">
-  var json_str="{\"data\":[{\"name\":\"zc\",\"age\":10},{\"name\":\"zc2\",\"age\":10}]}";
-  var obj = JSON.parse(json_str);
-  alert(obj["data"]);
-  alert(obj["data"].length);
-
-</script>
-
-<div><table border="1">
+<div id="table-container"><table border="1">
   <tr>
     <th>Month</th>
     <th>Savings</th>
@@ -17,3 +9,25 @@
   </tr>
 </table>
 </div>
+
+<script type="text/javascript" src="jquery-3.7.0.min.js"></script>
+<script type="text/javascript">
+  var json_str="{\"data\":[{\"name\":\"zc\",\"age\":10},{\"name\":\"zc2\",\"age\":10}]}";
+  var obj = JSON.parse(json_str);
+  // 生成表格头部
+  var table = '<table border="1"><thead><tr><th>board_mac</th><th>sensor_pin</th><th>sensor_type</th><th>pool_id</th><th>report_interval</th></tr></thead><tbody>';
+  
+  $.getJSON('/portal_cgi?opt=query_sensor&client_mac=aa:aa:aa:aa:aa:aa&date='+Date.now(),function(data){
+          var tmp = data.data;
+          
+          $.each(tmp, function(n, item){
+             table += '<tr><td>' + item.client_mac + '</td><td>' + item.sensor_pin + '</td><td>' + item.type + '</td><td>' + item.pool_id + '</td><td>' + item.report_interval + '</td></tr>' ;
+            })
+           // 结束表格
+          table += '</tbody></table>';
+           // 在页面中显示表格
+          $('#table-container').html(table);
+      });
+ 
+</script>
+

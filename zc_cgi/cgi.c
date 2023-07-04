@@ -613,11 +613,11 @@ int cgi_sys_query_elec_handler(connection_t *con)
 	char *period = con_value_get(con, "period");
 	char *client_mac = con_value_get(con, "client_mac");
 	char *client_temper_index = con_value_get(con, "client_temper_index");
-	if (!elec) {
+	/*if (!elec) {
 		cJSON_AddNumberToObject(con->response, "code", 1);
 		cJSON_AddStringToObject(con->response, "msg", "no elec");
 		goto out;
-	}
+	}*/
 
 	
 //	if (cgi_snd_msg(MSG_CMD_MANAGE_STOP_APP, app, strlen(app) + 1, NULL, NULL) == 0) {
@@ -653,11 +653,11 @@ int cgi_sys_query_water_level_handler(connection_t *con)
 	char *period = con_value_get(con, "period");
 	char *client_mac = con_value_get(con, "client_mac");
 	char *client_temper_index = con_value_get(con, "client_temper_index");
-	if (!elec) {
+	/*if (!elec) {
 		cJSON_AddNumberToObject(con->response, "code", 1);
 		cJSON_AddStringToObject(con->response, "msg", "no elec");
 		goto out;
-	}
+	}*/
 
 	
 //	if (cgi_snd_msg(MSG_CMD_MANAGE_STOP_APP, app, strlen(app) + 1, NULL, NULL) == 0) {
