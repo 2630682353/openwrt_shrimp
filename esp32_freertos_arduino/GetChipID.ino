@@ -14,6 +14,86 @@ typedef struct sensor_info_st
 	unsigned char pool_id;
 }sensor_info_t;
 
+typedef struct msg_item_st
+{
+	int msg_type;
+}msg_item_t;
+
+
+typedef struct util_timer_st {
+	time_t expire;
+	int (*cb_func)(void *para);
+	int loop;
+	int id;
+	int interval;
+	int timer_type;
+	void *para;
+	struct list_head list;
+}util_timer;
+
+static LIST_HEAD(my_timer_list); 
+static int timer_timeslot;
+static pthread_mutex_t timer_mutex;
+
+void timer_handler() {
+	time_t cur = uptime();
+	util_timer *p = NULL;
+	util_timer *n = NULL;
+	pthread_mutex_lock(&timer_mutex);
+	list_for_each_entry_safe(p, n, &my_timer_list, list) {
+		if (cur >= p->expire) {
+			p->cb_func(p->para);
+			if (!p->loop) {
+				list_del(&p->list);
+				if (p->para)
+					free(p->para);
+				free(p);
+			}
+			else {
+				p->expire = cur + p->interval;
+			}
+		}
+	}
+	pthread_mutex_unlock(&timer_mutex);
+}
+
+util_timer *add_timer(int (*cb_func)(),int delay,int loop, int interval, void *para, int type) {
+	util_timer *t = malloc(sizeof(util_timer));
+	t->cb_func = cb_func;
+	t->expire = uptime() + delay;
+	t->interval = interval;
+	t->loop = loop;
+	t->para = para;
+	t->timer_type = type;
+	pthread_mutex_lock(&timer_mutex);
+	list_add(&t->list, &my_timer_list);
+	pthread_mutex_unlock(&timer_mutex);
+	return t;
+}
+
+int del_timer(int type)
+{
+	util_timer *p = NULL;
+	util_timer *n = NULL;
+	pthread_mutex_lock(&timer_mutex);
+	list_for_each_entry_safe(p, n, &my_timer_list, list) {
+		if (p->timer_type == type) {
+			list_del(&p->list);
+			if (p->para)
+				free(p->para);
+			free(p);
+		}			
+	}
+	pthread_mutex_unlock(&timer_mutex);
+	return 0;
+}
+
+int timer_list_init()
+{
+	pthread_mutex_init(&timer_mutex, NULL);
+	return 0;
+}
+
 const char* host = "192.168.10.103";
 const int httpPort = 80;
 const char* streamId   = "....................";
@@ -112,6 +192,8 @@ int get_board_sensor_info()
 void main_task( void * parameter )
 {
     vTaskDelay(10);
+	char *msg_buf[16] = {0};
+	msg_queue = xQueueCreate(10, sizeof(msg_item_t));
     wifi_connect_times = 20;
     http_connect_times = 10;
     Serial.print("Connecting to ");
@@ -135,9 +217,25 @@ void main_task( void * parameter )
     while(1)
     {
       http_send(url, out);
+	  String json_str;
+	  DynamicJsonDocument json_obj(1024);
+		deserializeJson(json_obj, out);
+		serializeJson(json_obj, json_str);
+
+		const char* sensor = json_obj["sensor"];
+		long time          = json_obj["time"];
+		double latitude    = json_obj["data"][0];
+		double longitude   = json_obj["data"][1];
       Serial.println("out:"+ out);
       vTaskDelay(5000);
-    }  
+    } 
+	while (1)
+	{
+		xQueueReceive(msg_queue, msg_buf, 1000);
+		timer_handler();
+	}
+
+	
 }
  
 void task3()
