@@ -8,20 +8,57 @@
     <td>$100</td>
   </tr>
 </table>
-</div>
 
+</div>
+<div id="edit-container" width='600px'></div>
+<input type="button" onclick='add_sensor()' value='添加'>
 <script type="text/javascript" src="jquery-3.7.0.min.js"></script>
 <script type="text/javascript">
   var json_str="{\"data\":[{\"name\":\"zc\",\"age\":10},{\"name\":\"zc2\",\"age\":10}]}";
   var obj = JSON.parse(json_str);
+  var json_array;
+  function edit_send(n)
+  {
+  	if (n==1)
+  	{
+  		var url = '/portal_cgi?opt=update_sensor&id='+$('#sensor_id').val()+'&sensor_type='+$('#sensor_type').val()+'&pool_id='+$('#pool_id').val()+'&report_interval='+$('#report_interval').val()+'&other_param=0&date='+Date.now();
+  	}else if(n==2)
+  	{
+  		var url = '/portal_cgi?opt=add_sensor&client_mac='+$('#client_mac').val()+'&sensor_pin='+$('#sensor_pin').val()+'&sensor_type='+$('#sensor_type').val()+'&pool_id='+$('#pool_id').val()+'&report_interval='+$('#report_interval').val()+'&other_param='+$('#other_param').val()+'&date='+Date.now();
+  	}else if(n==3)
+  	{
+  		var url = '/portal_cgi?opt=add_sensor&client_mac='+$('#client_mac').val()+'&sensor_pin='+$('#sensor_pin').val()+'&sensor_type='+$('#sensor_type').val()+'&pool_id='+$('#pool_id').val()+'&report_interval='+$('#report_interval').val()+'&other_param='+$('#other_param').val()+'&date='+Date.now();
+  	}
+  	
+  	 $.getJSON(url,function(data){
+        if (data.code == 0)
+        {
+        	location.reload();
+        }
+      });
+  }
+  function edit_sensor(n)
+  {
+  	$('#edit-container').html("id:<input type='text' id='sensor_id' value='"+json_array[n].id+"' disabled=true><br>client_mac:<input type='text' id='client_mac' value='"+json_array[n].client_mac+"' disabled=true><br>sensor_pin:<input type='text' id='sensor_pin' value='"+json_array[n].sensor_pin+"' disabled=true><br>type:<input type='text' id='sensor_type' value='"+json_array[n].type+"'><br>pool_id:<input id='pool_id' type='text' value='"+json_array[n].pool_id+"'><br>report_interval:<input type='text' id='report_interval' value='"+json_array[n].report_interval+"'><br>description:<input type='text' id='description' value='"+json_array[n].description+"'><input type='button' value='提交' onclick='edit_send(1)'>");
+  }
+  function delete_sensor(n)
+  {
+  	$('#edit-container').html("id:<input type='hidden' id='sensor_id' value='"+json_array[n].id+"'");
+  	edit_send(3);
+  }
+  function add_sensor()
+  {
+  	$('#edit-container').html("client_mac:<input type='text' id='client_mac'><br>sensor_pin:<input type='text' id='sensor_pin'><br>type:<input type='text' id='sensor_type' ><br>pool_id:<input id='pool_id' type='text'><br>report_interval:<input type='text' id='report_interval'><br>description:<input type='text' id='description'><input type='button' value='提交' onclick='edit_send(2)'>");
+  }
   // 生成表格头部
-  var table = '<table border="1"><thead><tr><th>board_mac</th><th>sensor_pin</th><th>sensor_type</th><th>pool_id</th><th>report_interval</th></tr></thead><tbody>';
+  var table = '<table border="1"><thead><tr><th>id</th><th>board_mac</th><th>sensor_pin</th><th>sensor_type</th><th>pool_id</th><th>report_interval</th><th>opt</th></tr></thead><tbody>';
+  
   
   $.getJSON('/portal_cgi?opt=query_sensor&client_mac=aa:aa:aa:aa:aa:aa&date='+Date.now(),function(data){
-          var tmp = data.data;
+          json_array = data.data;
           
-          $.each(tmp, function(n, item){
-             table += '<tr><td>' + item.client_mac + '</td><td>' + item.sensor_pin + '</td><td>' + item.type + '</td><td>' + item.pool_id + '</td><td>' + item.report_interval + '</td></tr>' ;
+          $.each(json_array, function(n, item){
+             table += '<tr><td>' + item.id + '</td><td>' + item.client_mac + '</td><td>' + item.sensor_pin + '</td><td>' + item.type + '</td><td>' + item.pool_id + '</td><td>' + item.report_interval + '</td><td><input type=\'button\' value=\'修改\' onclick=\'edit_sensor('+n+')\'/><input type=\'button\' value=\'删除\' onclick=\'delete_sensor('+n+')\'/></td></tr>' ;
             })
            // 结束表格
           table += '</tbody></table>';

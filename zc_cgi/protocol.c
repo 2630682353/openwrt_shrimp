@@ -23,6 +23,7 @@
 #define PRO_QUERY_TRANSPARENT "query_transparent"
 
 #define PRO_QUERY_SENSOR  "query_sensor"
+#define PRO_UPDATE_SENSOR  "update_sensor"
 #define PRO_QUERY_SENSOR_REAL  "query_sensor_real"
 
 #define PRO_HEART_BEAT "heart_beat"
@@ -70,7 +71,7 @@ extern int cgi_sys_board_start_handler(connection_t *con);
 extern int cgi_board_report_board_sensor_info(connection_t *con);
 extern int cgi_sys_add_task_handler(connection_t *con);
 extern int cgi_sys_task_result_handler(connection_t *con);
-
+extern int cgi_sys_update_sensor_info_handler(connection_t *con);
 
 
 static cgi_protocol_t pro_list[] ={
@@ -83,6 +84,7 @@ static cgi_protocol_t pro_list[] ={
 	{PRO_HEART_BEAT, cgi_sys_heart_beat_handler},
 	{PRO_ADD_SENSOR, cgi_sys_add_sensor_info_handler},
 	{PRO_QUERY_SENSOR, cgi_sys_query_sensor_info_handler},
+	{PRO_UPDATE_SENSOR, cgi_sys_update_sensor_info_handler},
 	{PRO_QUERY_SENSOR_REAL, cgi_sys_query_sensor_info_real_handler},
 	{PRO_GET_BOARDS_STATUS, cgi_sys_get_boards_status_handler},
 	{PRO_QUERY_AIR_PRESSURE, cgi_sys_query_air_pressure_handler},

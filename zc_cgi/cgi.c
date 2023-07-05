@@ -902,19 +902,19 @@ out:
 
 int cgi_sys_update_sensor_info_handler(connection_t *con)
 {	
-	//char *sensor_id = con_value_get(con, "sensor_id");
-	char *client_mac = con_value_get(con, "client_mac");
+	char *sensor_id = con_value_get(con, "id");
+	//char *client_mac = con_value_get(con, "client_mac");
 	//char *board_name = con_value_get(con, "board_name");
 	char *sensor_type = con_value_get(con, "sensor_type");
-	char *sensor_pin = con_value_get(con, "sensor_pin");
+	//char *sensor_pin = con_value_get(con, "sensor_pin");
 	char *pool_id = con_value_get(con, "pool_id");
 	char *report_interval = con_value_get(con, "report_interval");
 	char *other_param = con_value_get(con, "other_param");
 	char sql[256] = {0};
 	char *errmsg = NULL;
-	if (!client_mac || !sensor_pin || !sensor_type) {
+	if (!sensor_id) {
 		cJSON_AddNumberToObject(con->response, "code", 1);
-		cJSON_AddStringToObject(con->response, "msg", "no client_mac or no board_name");
+		cJSON_AddStringToObject(con->response, "msg", "no id");
 		goto out;
 	}
 //	char *board = v_list_get(&head, client_mac);
@@ -934,8 +934,8 @@ int cgi_sys_update_sensor_info_handler(connection_t *con)
 		*/
 	
 	snprintf(sql, sizeof(sql) - 1, "update `sensor_info` set type=%d, pool_id=%d, report_interval=%d, other_param=%s where "
-		"client_mac='%s' and sensor_pin=%d;", atoi(sensor_type),  atoi(pool_id),  atoi(report_interval), 
-		other_param,client_mac, atoi(sensor_pin));
+		"id=%s", atoi(sensor_type),  atoi(pool_id),  atoi(report_interval), 
+		other_param, sensor_id);
 	if(SQLITE_OK != sqlite3_exec(pdb,sql,NULL,NULL,&errmsg))
 	{
 			CGI_LOG(LOG_ERR, "update record fail!%s\n",errmsg);
