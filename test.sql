@@ -15,9 +15,9 @@ create table `sensor_info`(
 	`pool_id`  int(4),
 	`add_time` 	timestamp NOT NULL DEFAULT (datetime('now','localtime')),
 	`report_interval`	int(8),
-	`other_param`	varchar(32),
-	`description`	varchar(64)
-)
+	`other_param`	varchar(32) default '0',
+	`description`	varchar(64) default '0'
+);
 
 create table `ph` (
 	`id` integer primary key autoincrement,
