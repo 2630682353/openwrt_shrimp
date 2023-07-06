@@ -4,8 +4,12 @@
 
 #include <WiFi.h>
 
+#define PIN_NUM 40
 const char* ssid     = "zc_test";
 const char* password = "58285390";
+struct list_head my_timer_list;
+char *sensor_table[PIN_NUM];
+
 typedef struct sensor_info_st
 {
 	int report_interval;
@@ -25,9 +29,10 @@ typedef struct util_timer_st {
 	int (*cb_func)(void *para);
 	int loop;
 	int id;
+	int pin;
 	int interval;
 	int timer_type;
-	void *para;
+	String other_param;
 	struct list_head list;
 }util_timer;
 
@@ -39,7 +44,6 @@ void timer_handler() {
 	time_t cur = uptime();
 	util_timer *p = NULL;
 	util_timer *n = NULL;
-	pthread_mutex_lock(&timer_mutex);
 	list_for_each_entry_safe(p, n, &my_timer_list, list) {
 		if (cur >= p->expire) {
 			p->cb_func(p->para);
@@ -54,7 +58,6 @@ void timer_handler() {
 			}
 		}
 	}
-	pthread_mutex_unlock(&timer_mutex);
 }
 
 util_timer *add_timer(int (*cb_func)(),int delay,int loop, int interval, void *para, int type) {
@@ -65,9 +68,7 @@ util_timer *add_timer(int (*cb_func)(),int delay,int loop, int interval, void *p
 	t->loop = loop;
 	t->para = para;
 	t->timer_type = type;
-	pthread_mutex_lock(&timer_mutex);
 	list_add(&t->list, &my_timer_list);
-	pthread_mutex_unlock(&timer_mutex);
 	return t;
 }
 
@@ -75,7 +76,6 @@ int del_timer(int type)
 {
 	util_timer *p = NULL;
 	util_timer *n = NULL;
-	pthread_mutex_lock(&timer_mutex);
 	list_for_each_entry_safe(p, n, &my_timer_list, list) {
 		if (p->timer_type == type) {
 			list_del(&p->list);
@@ -84,7 +84,6 @@ int del_timer(int type)
 			free(p);
 		}			
 	}
-	pthread_mutex_unlock(&timer_mutex);
 	return 0;
 }
 
@@ -93,6 +92,18 @@ int timer_list_init()
 	pthread_mutex_init(&timer_mutex, NULL);
 	return 0;
 }
+
+util_timer* find_board(int pin)
+{
+	util_timer *t = NULL;
+	list_for_each_entry(t, &my_timer_list, list) {
+		if (t->, client_mac) == 0) {
+			return p;
+		}
+	}
+	return p;
+}
+
 
 const char* host = "192.168.10.103";
 const int httpPort = 80;
@@ -104,33 +115,9 @@ int temper_report_interval = 600; //s
 int water_level_report_interval = 600;
 int board_sensor_report_interval = 600;
 int air_pressure_report_interval = 60;
-TimerHandle_t temper_report_timer;
-TimerHandle_t water_level_report_timer;
-TimerHandle_t board_sensor_report_timer;
-TimerHandle_t heart_beat_report_timer;
 
 sensor_info_t *sensor_array = NULL;
-
-
-BaseType_t xTimerChangePeriod( TimerHandle_t xTimer,
-                            TickType_t xNewTimerPeriodInTicks,
-                            TickType_t xTicksToWait );
-
-void pxSoftWaveTimer(TimerHandle_t xTimer); //软件定时器回调函数
-
-SoftWaveTimer1 = xTimerCreate(
-							 "heart_beat_timer",
-							 1000,
-							 pdTRUE,
-							 (void*)1,
-							 heart_beat_report_timer);
- SoftWaveTimer2 = xTimerCreate(
-							 "board_sensor_report_timer",	//定时器句柄
-							 3000,				//定时器周期
-							 pdTRUE,			//周期/单次定时器
-							 (void*)2,			//定时器ID
-							 board_sensor_report_timer);	//回调函数指针
-
+char *dev_mac = "aa:aa:aa:aa:aa:aa"
 
 int http_send(String url, String &out)
 {
@@ -175,6 +162,45 @@ int http_send(String url, String &out)
   return 0;
 }
 
+int fresh_sensor_info()
+{
+	String url = "/portal_cgi?opt=query_temper&client_mac="+dev_mac;
+    String out = "";
+
+	http_send(url, out);
+	String json_str;
+	DynamicJsonDocument json_obj(1024);
+	deserializeJson(json_obj, out);
+	serializeJson(json_obj, json_str);
+
+	for (int i = 0; i < json_obj["data"].length; i++)
+	{
+		sensor_info_t *sensor_info = malloc(sizeof(sensor_info_t));
+		sensor_info->pin = json_obj["data"][i]["sensor_pin"].toInt();
+		sensor_info->type = json_obj["data"][i]["type"].toInt();
+		sensor_table[sensor_info->pin] = sensor_info;
+		
+	}
+	util_timer *t = NULL;
+	list_for_each_entry(t, &my_timer_list, list) {
+		if (strcmp(p->mac, client_mac) == 0) {
+			if (!list_empty(&p->task_list)) {
+				list_for_each_entry_safe(task, task2, &p->task_list, task_list) {
+					if (strcmp(task->task_name, task_name) == 0 && task->task_id == task_id) {
+						list_del(&task->task_list);
+						free(task);
+						break;
+					}				
+				}
+			}
+			break;
+		}
+	}
+
+	Serial.println("out:"+ out);
+	vTaskDelay(5000);
+}
+
 int get_board_sensor_info()
 {
 	String sensor_json = "";
@@ -212,23 +238,8 @@ void main_task( void * parameter )
     Serial.println("WiFi connected");
     Serial.println("IP address: ");
     Serial.println(WiFi.localIP());
-    String url = "/portal_cgi?opt=query_temper&client_mac=all&period=recent&client_temper_index=all";
-    String out = "";
-    while(1)
-    {
-      http_send(url, out);
-	  String json_str;
-	  DynamicJsonDocument json_obj(1024);
-		deserializeJson(json_obj, out);
-		serializeJson(json_obj, json_str);
-
-		const char* sensor = json_obj["sensor"];
-		long time          = json_obj["time"];
-		double latitude    = json_obj["data"][0];
-		double longitude   = json_obj["data"][1];
-      Serial.println("out:"+ out);
-      vTaskDelay(5000);
-    } 
+    
+    
 	while (1)
 	{
 		xQueueReceive(msg_queue, msg_buf, 1000);
@@ -265,6 +276,10 @@ void task2( void * parameter)
  
 void setup() {
   Serial.begin(115200);
+  for (int i=0; i< PIN_NUM;i++)
+  {
+	sensor_table[i] = NULL;
+  }
   
   xTaskCreate(
                     main_task,          //指定任务函数，也就是上面那个task1函数
