@@ -73,7 +73,24 @@ int query_table(char *sql, int r, int c)
         return result;
     }
 }
+int query_multi_result(char *sql, char out[][])
+{
+	char *errMsg;
+    char **dbResult;
+    int nRow = 0, nColumn = 0, i=0;
+    int rc;
 
+    int result;
+    rc = sqlite3_get_table(pdb,sql,&dbResult,&nRow,&nColumn,&errMsg);
+	if (rc != SQLITE_OK)
+		return -1;
+	for (i=0;i < nRow; i++)
+	{
+		strncpy(out[i], dbResult[i], 32);
+	}
+	sqlite3_free_table(dbResult);
+    return nRow;
+}
 void strlower(char *s)
 {
 	int i;
@@ -103,6 +120,17 @@ int query_data_to_json(void *para,int ncol,char *col_val[],char ** col_name)
 	}
 	cJSON_AddItemToArray(array, item);
 	return 0;
+}
+
+board_info_t* find_board(char *client_mac)
+{
+	board_info_t *p = NULL;
+	list_for_each_entry(p, &board_list, board_list) {
+		if (strcmp(p->mac, client_mac) == 0) {
+			return p;
+		}
+	}
+	return p;
 }
 
 #if 0
@@ -743,33 +771,18 @@ int cgi_sys_heart_beat_handler(connection_t *con)
 		goto out;
 	}
 	board_info_t *p = NULL;
-	task_info_t *task = NULL;
-	cJSON *array = NULL, *item = NULL;
 	list_for_each_entry(p, &board_list, board_list) {
 		if (strcmp(p->mac, client_mac) == 0) {
 			p->last_heart_beat_time = uptime();
-			if (!list_empty(&p->task_list)) {
-				array = cJSON_CreateArray();
-				list_for_each_entry(task, &p->task_list, task_list) {
-					if (!task->has_been_sent){
-						item = cJSON_CreateObject();
-						cJSON_AddStringToObject(item, "task_name", task->task_name);
-						cJSON_AddNumberToObject(item, "task_id", task->task_id);
-						cJSON_AddNumberToObject(item, "report_interval", task->task_report_interval);
-						cJSON_AddStringToObject(item, "task_param", task->other_param);
-						cJSON_AddItemToArray(array, item);
-						task->has_been_sent = 1;
-					}
-				}
+			if (p->need_syn_sensor_info)
+			{
+				cJSON_AddNumberToObject(con->response, "cmd", 1); //need syn sensor_info
 			}
 			break;
 		}
 	}
 	cJSON_AddNumberToObject(con->response, "code", 0);
-	if (array != NULL) {
-		cJSON_AddItemToObject(con->response, "task", array);
-	}
-
+	
 out:
 	return 1;
 }
@@ -894,16 +907,66 @@ int cgi_sys_add_sensor_info_handler(connection_t *con)
 		}
 	}
 	cJSON_AddNumberToObject(con->response, "code", 0);
-//	}
+	board_info_t *board = find_board(client_mac);
+	if (board == NULL)
+	{
+		board = malloc(sizeof(board_info_t));
+		memset(board, 0, sizeof(board_info_t));
+		strncpy(board->mac, client_mac, sizeof(board->mac));
+		board->need_syn_sensor_info = 1;
+		list_add(&board->board_list, &board_list);
+	}else
+	{
+		board->need_syn_sensor_info = 1;
+	}
+	
+out:
+	return 1;
+}
+
+int cgi_sys_delete_sensor_handler(connection_t *con)
+{	
+	char *id = con_value_get(con, "id");
+	char *client_mac = con_value_get(con, "client_mac");
+	char sql[256] = {0};
+	char *errmsg = NULL;
+	if (!id || !client_mac) {
+		cJSON_AddNumberToObject(con->response, "code", 1);
+		cJSON_AddStringToObject(con->response, "msg", "no id or no client_mac");
+		goto out;
+	}
+	snprintf(sql, sizeof(sql) - 1, "delete from `sensor_info` where id=%s", id);
+	if(SQLITE_OK != sqlite3_exec(pdb,sql,NULL,NULL,&errmsg))
+	{
+			CGI_LOG(LOG_ERR, "insert record fail!%s\n",errmsg);
+			cJSON_AddNumberToObject(con->response, "code", 1);
+			cJSON_AddStringToObject(con->response, "msg", errmsg);
+			goto out;
+	}
+	
+	cJSON_AddNumberToObject(con->response, "code", 0);
+	board_info_t *board = find_board(client_mac);
+	if (board == NULL)
+	{
+		board = malloc(sizeof(board_info_t));
+		memset(board, 0, sizeof(board_info_t));
+		strncpy(board->mac, client_mac, sizeof(board->mac));
+		board->need_syn_sensor_info = 1;
+		list_add(&board->board_list, &board_list);
+	}else
+	{
+		board->need_syn_sensor_info = 1;
+	}
 
 out:
 	return 1;
 }
 
+
 int cgi_sys_update_sensor_info_handler(connection_t *con)
 {	
 	char *sensor_id = con_value_get(con, "id");
-	//char *client_mac = con_value_get(con, "client_mac");
+	char *client_mac = con_value_get(con, "client_mac");
 	//char *board_name = con_value_get(con, "board_name");
 	char *sensor_type = con_value_get(con, "sensor_type");
 	//char *sensor_pin = con_value_get(con, "sensor_pin");
@@ -917,21 +980,6 @@ int cgi_sys_update_sensor_info_handler(connection_t *con)
 		cJSON_AddStringToObject(con->response, "msg", "no id");
 		goto out;
 	}
-//	char *board = v_list_get(&head, client_mac);
-//	if (board != NULL)
-//	{
-//		cJSON_AddNumberToObject(con->response, "code", 1);
-//		cJSON_AddStringToObject(con->response, "msg", "board_info exist");
-//	}else
-//	{
-	/*
-
-		esp32_board_t *board = malloc(sizeof(esp32_board_t));
-		strncpy(board->mac, client_mac, sizeof(board->mac));
-		strncpy(board->name, board_name, sizeof(board->name));
-		v_list_add(&head, board->mac, board);
-		cJSON_AddNumberToObject(con->response, "code", 0);
-		*/
 	
 	snprintf(sql, sizeof(sql) - 1, "update `sensor_info` set type=%d, pool_id=%d, report_interval=%d, other_param=%s where "
 		"id=%s", atoi(sensor_type),  atoi(pool_id),  atoi(report_interval), 
@@ -944,7 +992,18 @@ int cgi_sys_update_sensor_info_handler(connection_t *con)
 			goto out;
 	}
 	cJSON_AddNumberToObject(con->response, "code", 0);
-//	}
+	board_info_t *board = find_board(client_mac);
+	if (board == NULL)
+	{
+		board = malloc(sizeof(board_info_t));
+		memset(board, 0, sizeof(board_info_t));
+		strncpy(board->mac, client_mac, sizeof(board->mac));
+		board->need_syn_sensor_info = 1;
+		list_add(&board->board_list, &board_list);
+	}else
+	{
+		board->need_syn_sensor_info = 1;
+	}
 
 out:
 	return 1;
@@ -979,15 +1038,10 @@ out:
 
 int cgi_sys_query_sensor_info_real_handler(connection_t *con)
 {	
-	char *client_mac = con_value_get(con, "client_mac");
 
 	char sql[256] = {0};
 	char *errmsg = NULL;
-	if (!client_mac) {
-		cJSON_AddNumberToObject(con->response, "code", 1);
-		cJSON_AddStringToObject(con->response, "msg", "no client_mac or client_mac=all");
-		goto out;
-	}
+
 	cJSON *array = cJSON_CreateArray();
 	snprintf(sql, sizeof(sql), "select * from sensor_info_real;");
 	if(SQLITE_OK != sqlite3_exec(pdb, sql, query_data_to_json,(void *)array, &errmsg))
@@ -1004,7 +1058,7 @@ out:
 }
 
 
-int cgi_sys_board_start_handler(connection_t *con)
+int cgi_sys_query_sensor_info_by_mac_handler(connection_t *con)
 {	
 	char *client_mac = con_value_get(con, "client_mac");
 
@@ -1036,9 +1090,9 @@ int cgi_board_report_board_sensor_info(connection_t *con)
 	char *sensor_json = con_value_get(con, "sensor_json");
 
 	char sql[256] = {0};
-	int type, sensor_pin, pool_id, report_interval;
+	int type, sensor_pin, pool_id, report_interval, id;
 	
-	char *errmsg = NULL;
+	char *errmsg = NULL, *other_param;
 	if (!client_mac || !sensor_json) {
 		cJSON_AddNumberToObject(con->response, "code", 1);
 		cJSON_AddStringToObject(con->response, "msg", "no client_mac or no sensor_json");
@@ -1059,14 +1113,18 @@ int cgi_board_report_board_sensor_info(connection_t *con)
 		array_item = cJSON_GetArrayItem(sensor_array, i);
 		item = cJSON_GetObjectItem(array_item, "sensor_pin");
 		sensor_pin = item->valueint;
+		item = cJSON_GetObjectItem(array_item, "id");
+		id = item->valueint;
 		item = cJSON_GetObjectItem(array_item, "type");
 		type = item->valueint;
 		item = cJSON_GetObjectItem(array_item, "pool_id");
 		pool_id = item->valueint;
 		item = cJSON_GetObjectItem(array_item, "report_interval");
 		report_interval = item->valueint;
-		snprintf(sql, sizeof(sql) - 1, "replace into `sensor_info_real` (client_mac, sensor_pin, type, pool_id, report_interval) "
-					"values('%s', %d, %d, %d, %d)", client_mac, sensor_pin, type, pool_id, report_interval);
+		item = cJSON_GetObjectItem(array_item, "other_param");
+		other_param = item->valuestring;
+		snprintf(sql, sizeof(sql) - 1, "replace into `sensor_info_real` (id, client_mac, sensor_pin, type, pool_id, report_interval, other_param) "
+					"values(%d, '%s', %d, %d, %d, %d, '%s')",id, client_mac, sensor_pin, type, pool_id, report_interval, other_param);
 		if(SQLITE_OK != sqlite3_exec(pdb,sql,NULL,NULL,&errmsg))
 		{
 				CGI_LOG(LOG_ERR, "insert record fail!%s\n",errmsg);

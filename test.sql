@@ -19,6 +19,18 @@ create table `sensor_info`(
 	`description`	varchar(64) default '0'
 );
 
+create table `sensor_info_real`(
+	`id` integer primary key autoincrement,
+	`client_mac`	varchar(64) NOT NULL,
+	`sensor_pin`  int(4) not null,
+	`type` int(4),
+	`pool_id`  int(4),
+	`add_time` 	timestamp NOT NULL DEFAULT (datetime('now','localtime')),
+	`report_interval`	int(8),
+	`other_param`	varchar(32) default '0',
+	`description`	varchar(64) default '0'
+);
+
 create table `ph` (
 	`id` integer primary key autoincrement,
 	`client_mac`	varchar(64) NOT NULL,

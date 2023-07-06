@@ -27,7 +27,7 @@
   		var url = '/portal_cgi?opt=add_sensor&client_mac='+$('#client_mac').val()+'&sensor_pin='+$('#sensor_pin').val()+'&sensor_type='+$('#sensor_type').val()+'&pool_id='+$('#pool_id').val()+'&report_interval='+$('#report_interval').val()+'&other_param='+$('#other_param').val()+'&date='+Date.now();
   	}else if(n==3)
   	{
-  		var url = '/portal_cgi?opt=add_sensor&client_mac='+$('#client_mac').val()+'&sensor_pin='+$('#sensor_pin').val()+'&sensor_type='+$('#sensor_type').val()+'&pool_id='+$('#pool_id').val()+'&report_interval='+$('#report_interval').val()+'&other_param='+$('#other_param').val()+'&date='+Date.now();
+  		var url = '/portal_cgi?opt=delete_sensor&id='+$('#sensor_id').val()+'&date='+Date.now();
   	}
   	
   	 $.getJSON(url,function(data){
