@@ -1,15 +1,20 @@
 #include <dummy.h>
 
 #include <AsyncUDP.h>
-
+#include "list.h"
 #include <WiFi.h>
+#include <ArduinoJson.h>
+#include <string.h>
 
 #define PIN_NUM 40
-#define HEART_BEAT_INTERVAL 10*1000
+#define HEART_BEAT_INTERVAL 10
 const char* ssid     = "zc_test";
 const char* password = "58285390";
-struct list_head my_timer_list;
-sensor_info_t *sensor_table[PIN_NUM];
+String dev_mac = "aa:aa:aa:aa:aa:aa";
+
+QueueHandle_t msg_queue;
+LIST_HEAD(my_timer_list);
+
 enum SENSOR_TYPE
 {
 	SENSOR_TEMPER = 1,
@@ -36,7 +41,7 @@ typedef struct msg_item_st
 
 
 typedef struct util_timer_st {
-	time_t expire;
+	unsigned long expire;
 	int (*cb_func)(void *para);
 	int loop;
 	int id;
@@ -44,16 +49,16 @@ typedef struct util_timer_st {
 	int interval;
 	int timer_type;
 	int pool_id;
-	String other_param;
+	char other_param[32];
+  char *para;
 	struct list_head list;
 }util_timer;
 
-static LIST_HEAD(my_timer_list); 
 static int timer_timeslot;
 static pthread_mutex_t timer_mutex;
 
 void timer_handler() {
-	time_t cur = uptime();
+	unsigned long cur = millis();
 	util_timer *p = NULL;
 	util_timer *n = NULL;
 	list_for_each_entry_safe(p, n, &my_timer_list, list) {
@@ -66,22 +71,10 @@ void timer_handler() {
 				free(p);
 			}
 			else {
-				p->expire = cur + p->interval;
+				p->expire = cur + p->interval*1000;
 			}
 		}
 	}
-}
-
-util_timer *add_timer(int (*cb_func)(),int delay,int loop, int interval, void *para, int type) {
-	util_timer *t = malloc(sizeof(util_timer));
-	t->cb_func = cb_func;
-	t->expire = uptime() + delay;
-	t->interval = interval;
-	t->loop = loop;
-	t->para = para;
-	t->timer_type = type;
-	list_add(&t->list, &my_timer_list);
-	return t;
 }
 
 int del_timer(int type)
@@ -107,16 +100,27 @@ util_timer* find_timer(int pin)
 			return t;
 		}
 	}
-	return t;
+	return NULL;
 }
 
 int sensor_temper_func(void *param)
 {
-	Serial.println("int temper func");
+  int time = millis();
+  Serial.print(time);
+	Serial.println("int temper func ");
 }
 int sensor_heart_beat(void *param)
 {
-	Serial.println("int heart_beat func");
+	String url = "/portal_cgi?opt=heart_beat&client_mac="+dev_mac;
+	DynamicJsonDocument json_obj(1024);
+	String out;
+	http_send(url, out);
+  deserializeJson(json_obj, out);
+  if (json_obj["cmd"] == 1)
+  {
+      Serial.println("cmd = 1, need refresh");
+      fresh_sensor_info();
+  }
 }
 
 
@@ -126,7 +130,7 @@ timer_func get_timer_func(int sensor_type)
 	{
 		case SENSOR_TEMPER:
 			return sensor_temper_func;
-			break
+			break;
 		case SENSOR_HEART_BEAT:
 			return sensor_heart_beat;
 			break;
@@ -134,7 +138,7 @@ timer_func get_timer_func(int sensor_type)
 	return NULL;
 }
 
-const char* host = "192.168.10.103";
+const char* host = "192.168.10.105";
 const int httpPort = 80;
 const char* streamId   = "....................";
 const char* privateKey = "....................";
@@ -146,7 +150,6 @@ int board_sensor_report_interval = 600;
 int air_pressure_report_interval = 60;
 
 sensor_info_t *sensor_array = NULL;
-char *dev_mac = "aa:aa:aa:aa:aa:aa";
 
 int http_send(String url, String &out)
 {
@@ -190,17 +193,20 @@ int http_send(String url, String &out)
 
 int report_sensor_info()
 {
-	String url = "/portal_cgi?opt=query_sensor&client_mac="+dev_mac+"sensor_json=";
+	String url = "/portal_cgi?opt=report_board_sensor&client_mac="+dev_mac+"&sensor_json=";
 	DynamicJsonDocument json_obj(1024);
 	util_timer *t = NULL;
 	int index = 0;
 	list_for_each_entry(t, &my_timer_list, list) {
+    if (t->timer_type >= 100)
+      continue;
 		json_obj["sensor_array"][index]["id"] = t->id;
 		json_obj["sensor_array"][index]["report_interval"] = t->interval;
 		json_obj["sensor_array"][index]["pool_id"] = t->pool_id;
 		json_obj["sensor_array"][index]["sensor_pin"] = t->pin;
 		json_obj["sensor_array"][index]["other_param"] = t->other_param;
 		json_obj["sensor_array"][index]["type"] = t->timer_type;
+    index++;
 	}
 	String json_str;
 	serializeJson(json_obj, json_str);
@@ -211,49 +217,52 @@ int report_sensor_info()
 
 int fresh_sensor_info()
 {
-	String url = "/portal_cgi?opt=query_sensor&client_mac="+dev_mac;
+	String url = "/portal_cgi?opt=query_sensor_by_mac&client_mac="+dev_mac;
     String out = "";
 
 	http_send(url, out);
 	String json_str;
 	DynamicJsonDocument json_obj(1024);
 	deserializeJson(json_obj, out);
-	serializeJson(json_obj, json_str);
-	
+
 	util_timer *t = NULL;
-	for (int i = 0; i < json_obj["data"].length; i++)
+	for (int i = 0; i < json_obj["data"].size(); i++)
 	{
-		int pin = json_obj["data"][i]["sensor_pin"].toInt();
+		int pin = atoi(json_obj["data"][i]["sensor_pin"]);
 		t = find_timer(pin);
 		if (t)
 		{
-			t->id = json_obj["data"][i]["id"].toInt();
-			t->timer_type = json_obj["data"][i]["type"].toInt();
-			t->interval = json_obj["data"][i]["report_interval"].toInt();
-			t->other_param = json_obj["data"][i]["other_param"];
+			t->id = atoi(json_obj["data"][i]["id"]);
+			t->timer_type = atoi(json_obj["data"][i]["type"]);
+			t->interval = atoi(json_obj["data"][i]["report_interval"]);
+			strncpy(t->other_param, json_obj["data"][i]["other_param"], sizeof(t->other_param));
 			t->pin = pin;
 		}else
 		{
-			t = malloc(sizeof(util_timer));
-			t->timer_type = json_obj["data"][i]["type"].toInt();
+			t = (util_timer *)malloc(sizeof(util_timer));
+      t->id = atoi(json_obj["data"][i]["id"]);
+      t->pool_id = atoi(json_obj["data"][i]["pool_id"]);
+			t->timer_type = atoi(json_obj["data"][i]["type"]);
 			t->cb_func = get_timer_func(t->timer_type);
 			t->pin = pin;
-			t->expire = uptime() + 20;
-			t->interval = json_obj["data"][i]["report_interval"].toInt();
+			t->expire = millis() + 20*1000;
+			t->interval = atoi(json_obj["data"][i]["report_interval"]);
 			t->loop = 1;
-			t->other_param = json_obj["data"][i]["other_param"];
+      strncpy(t->other_param, json_obj["data"][i]["other_param"], sizeof(t->other_param));
+      Serial.println("5");
 			list_add(&t->list, &my_timer_list);
 		}
 	}
+  Serial.println("after modify");
 	util_timer *p = NULL;
 	util_timer *n = NULL;
 	list_for_each_entry_safe(p, n, &my_timer_list, list) {
 		if (p->timer_type == SENSOR_HEART_BEAT)
 			continue;
 		int exist = 0;
-		for (int i = 0; i < json_obj["data"].length; i++)
+		for (int i = 0; i < json_obj["data"].size(); i++)
 		{
-			if (p->pin == json_obj["data"][i]["sensor_pin"].toInt())
+			if (p->pin == atoi(json_obj["data"][i]["sensor_pin"]))
 			{
 				exist = 1;
 				break;
@@ -298,15 +307,14 @@ void main_task( void * parameter )
 	while(wifi_connect() != 0)
 	{
 	}
-    fresh_sensor_info();
-	util_timer *t = malloc(sizeof(util_timer));
+  fresh_sensor_info();
+	util_timer *t = (util_timer *)malloc(sizeof(util_timer));
 	t->timer_type = SENSOR_HEART_BEAT;
 	t->cb_func = get_timer_func(t->timer_type);
 	t->pin = 100;
-	t->expire = uptime() + 20;
+	t->expire = millis() + 20*1000;
 	t->interval = HEART_BEAT_INTERVAL;
 	t->loop = 1;
-	t->other_param = "0";
 	list_add(&t->list, &my_timer_list);
 	while (1)
 	{
@@ -317,28 +325,13 @@ void main_task( void * parameter )
 	
 }
  
-void task3()
-{
-	keyVal = KEY_Scan(0);
-    if(keyVal == KEY0_PRES)         //启动定时器
-    {
-       xTimerStart(heart_beat_report_timer,0);
-       xTimerStart(heart_beat_report_timer,0);
-    }
-    if(keyVal == KEY1_PRES)         //关闭定时器
-    {
-       xTimerStop(heart_beat_report_timer,0);
-       xTimerStop(heart_beat_report_timer,0); 
-    }
-}
- 
 void task2( void * parameter)
 {
     char out_str[100] = {0};
     for( int i = 0;i<100;i++ ){
         sprintf(out_str, "Hello from task 2 %d", i);
         Serial.println(out_str);
-        vTaskDelay(10000); 
+        vTaskDelay(100000); 
     }
 }
  

@@ -73,7 +73,7 @@ int query_table(char *sql, int r, int c)
         return result;
     }
 }
-int query_multi_result(char *sql, char out[][])
+int query_multi_result(char *sql, char *out[])
 {
 	char *errMsg;
     char **dbResult;
@@ -777,6 +777,7 @@ int cgi_sys_heart_beat_handler(connection_t *con)
 			if (p->need_syn_sensor_info)
 			{
 				cJSON_AddNumberToObject(con->response, "cmd", 1); //need syn sensor_info
+				p->need_syn_sensor_info = 0;
 			}
 			break;
 		}
@@ -1012,15 +1013,9 @@ out:
 
 int cgi_sys_query_sensor_info_handler(connection_t *con)
 {	
-	char *client_mac = con_value_get(con, "client_mac");
-
+	
 	char sql[256] = {0};
 	char *errmsg = NULL;
-	if (!client_mac) {
-		cJSON_AddNumberToObject(con->response, "code", 1);
-		cJSON_AddStringToObject(con->response, "msg", "no client_mac or client_mac=all");
-		goto out;
-	}
 	cJSON *array = cJSON_CreateArray();
 	snprintf(sql, sizeof(sql), "select * from sensor_info;");
 	if(SQLITE_OK != sqlite3_exec(pdb, sql, query_data_to_json,(void *)array, &errmsg))
@@ -1105,6 +1100,15 @@ int cgi_board_report_board_sensor_info(connection_t *con)
 		cJSON_AddStringToObject(con->response, "msg", "json parse error");
 		goto out;
 	}
+	snprintf(sql, sizeof(sql) - 1, "delete from `sensor_info_real` where client_mac='%s'", client_mac);
+	if(SQLITE_OK != sqlite3_exec(pdb,sql,NULL,NULL,&errmsg))
+	{
+			CGI_LOG(LOG_ERR, "delete fail!%s\n",errmsg);
+			cJSON_AddNumberToObject(con->response, "code", 1);
+			cJSON_AddStringToObject(con->response, "msg", errmsg);
+			goto out;
+	}
+
 	cJSON *sensor_array = cJSON_GetObjectItem(root, "sensor_array");
 	cJSON *array_item = NULL, *item = NULL;
 	int sensor_num = cJSON_GetArraySize(sensor_array);
