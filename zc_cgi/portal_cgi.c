@@ -24,11 +24,9 @@ int cgi_init()
 
 
 struct list_head board_list;
+extern int query_multi_result(char *sql, char out[][]);
 
-board_info_t board_mac[] = {
-					{"aa:aa:aa:aa:aa:aa", "no.1_pool", 0, 0},
-					{"bb:bb:bb:bb:bb:bb", "no.2_pool", 0, 0}
-					};
+char board_mac[30][32];
 
 
 int main()
@@ -69,16 +67,27 @@ reply_print:
 	if (out)
 		free(out);
 */
+	if (pdb == NULL) {
+		if(SQLITE_OK != sqlite3_open("/home/work/test.db3",&pdb))
+		{
+				CGI_LOG(LOG_ERR, "open dtabase fail!%s\n",sqlite3_errmsg(pdb));
+				exit(EXIT_FAILURE);
+		}
 
+	}
+	for (int i=0;i < 30;i++)
+	{
+		memset(board_mac[i], 0, 32);
+	}
+	int num = query_multi_result("select distinct client_mac from sensor_info", board_mac);
 	INIT_LIST_HEAD(&board_list);
-	
-	for (int i = 0; i< sizeof(board_mac)/sizeof(board_mac[0]);i++)
+	for (int i = 0; i < num;i++)
 	{
 		board_info_t *board = malloc(sizeof(board_info_t));
 		memset(board, 0, sizeof(board));
-		strncpy(board->mac, board_mac[i].mac, sizeof(board->mac));
-		strncpy(board->name, board_mac[i].name, sizeof(board->name));
+		strncpy(board->mac, board_mac[i], 32);
 		list_add(&board->board_list, &board_list);
+		CGI_LOG("board_mac:%s", board->mac);
 	}
 	while(FCGI_Accept() >= 0)
 	{
