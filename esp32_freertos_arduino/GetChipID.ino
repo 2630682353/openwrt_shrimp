@@ -119,7 +119,9 @@ int sensor_heart_beat(void *param)
   if (json_obj["cmd"] == 1)
   {
       Serial.println("cmd = 1, need refresh");
-      fresh_sensor_info();
+      //fresh_sensor_info();
+      int cmd = 1;
+      xQueueSend(msg_queue, &cmd, 0);
   }
 }
 
@@ -289,20 +291,28 @@ int wifi_connect()
         wifi_connect_times--;
         vTaskDelay(500);
         if (wifi_connect_times < 0)
+        {
+          wifi_connect_times = 20;
+          vTaskDelay(20000); //连不上wifi睡眠20s
           return -1;
+        }
         Serial.print(".");
     }
 	Serial.println("");
     Serial.println("WiFi connected");
     Serial.println("IP address: ");
 	Serial.println(WiFi.localIP());
+  byte mac[6];
+  WiFi.macAddress(mac);
+  dev_mac =  String(mac[0], HEX)+":"+String(mac[1], HEX)+":"+String(mac[2], HEX)+
+              ":"+String(mac[3], HEX)+":"+String(mac[4], HEX) +":"+String(mac[5], HEX);
+  Serial.println("mac:"+dev_mac);
 	return 0;
 }
 
 void main_task( void * parameter )
 {
-    vTaskDelay(10);
-	char *msg_buf[16] = {0};
+  vTaskDelay(10);
 	msg_queue = xQueueCreate(10, sizeof(msg_item_t));
 	while(wifi_connect() != 0)
 	{
@@ -316,9 +326,22 @@ void main_task( void * parameter )
 	t->interval = HEART_BEAT_INTERVAL;
 	t->loop = 1;
 	list_add(&t->list, &my_timer_list);
+  int cmds[100];
+  int ret = 0;
 	while (1)
 	{
-		xQueueReceive(msg_queue, msg_buf, 1000);
+      
+    ret = xQueueReceive(msg_queue, cmds, 1000);
+    if (ret > 0) {
+      for(int i = 0; i < ret; i++) {
+        switch(cmds[i]) {
+        case 1:
+          fresh_sensor_info();
+          break;
+        }
+      }
+    }
+		
 		timer_handler();
 	}
 
