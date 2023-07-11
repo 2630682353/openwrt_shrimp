@@ -5,12 +5,19 @@
 #include <WiFi.h>
 #include <ArduinoJson.h>
 #include <string.h>
+#include "time.h"
+
 
 #define PIN_NUM 40
 #define HEART_BEAT_INTERVAL 10
 const char* ssid     = "zc_test";
 const char* password = "58285390";
 String dev_mac = "aa:aa:aa:aa:aa:aa";
+
+const char* ntpServer = "us.pool.ntp.org";
+const long  gmtOffset_sec = 3600*7;
+const int   daylightOffset_sec = 3600;
+
 
 QueueHandle_t msg_queue;
 LIST_HEAD(my_timer_list);
@@ -19,9 +26,11 @@ enum SENSOR_TYPE
 {
 	SENSOR_TEMPER = 1,
 	SENSOR_FEED,
+	SENSOR_MOTOR,
 	SENSOR_AIR_PRESSURE,
 	SENSOR_WATER_LEVEL,
-	SENSOR_HEART_BEAT = 100,
+	SENSOR_MOTOR_SPECIFY_TIME = 100,
+	SENSOR_HEART_BEAT = 200,
 };
 typedef int (*timer_func)(void *param);
 
@@ -39,23 +48,40 @@ typedef struct msg_item_st
 	int msg_type;
 }msg_item_t;
 
+void printLocalTime()
+{
+  struct tm timeinfo;
+  if(!getLocalTime(&timeinfo)){
+    Serial.println("Failed to obtain time");
+    return;
+  }
+  Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
+}
 
 typedef struct util_timer_st {
 	unsigned long expire;
 	int (*cb_func)(void *para);
-	int loop;
+	unsigned char loop;
+	unsigned char pin;
+	unsigned char timer_type;
+	unsigned char pool_id;
 	int id;
-	int pin;
 	int interval;
-	int timer_type;
-	int pool_id;
-	char other_param[32];
-  char *para;
+	char other_param[64];
+  	char *para;
 	struct list_head list;
 }util_timer;
 
 static int timer_timeslot;
 static pthread_mutex_t timer_mutex;
+
+unsigned long  calculate_expire(char *time_str)
+{
+	unsigned long cur = millis();
+	if (strlen(time_str) == 0)
+		return cur+365*24*3600*1000*10;
+}
+
 
 void timer_handler() {
 	unsigned long cur = millis();
@@ -63,7 +89,7 @@ void timer_handler() {
 	util_timer *n = NULL;
 	list_for_each_entry_safe(p, n, &my_timer_list, list) {
 		if (cur >= p->expire) {
-			p->cb_func(p->para);
+			p->cb_func((void *)p);
 			if (!p->loop) {
 				list_del(&p->list);
 				if (p->para)
@@ -71,7 +97,13 @@ void timer_handler() {
 				free(p);
 			}
 			else {
-				p->expire = cur + p->interval*1000;
+				if (p->timer_type >= 100 && p->timer_type < 200)
+				{
+					p->expire = calculate_expire(p->other_param);
+				}else
+				{
+					p->expire = cur + p->interval*1000;
+				}
 			}
 		}
 	}
@@ -107,8 +139,21 @@ int sensor_temper_func(void *param)
 {
   int time = millis();
   Serial.print(time);
-	Serial.println("int temper func ");
+  Serial.println("int temper func ");
 }
+int sensor_feed_func(void *param)
+{
+  int time = millis();
+  Serial.print(time);
+  Serial.println("int feed func ");
+}
+int sensor_motor_func(void *param)
+{
+  util_timer *p = (util_timer *)param;
+}
+
+
+
 int sensor_heart_beat(void *param)
 {
 	String url = "/portal_cgi?opt=heart_beat&client_mac="+dev_mac;
@@ -317,7 +362,9 @@ void main_task( void * parameter )
 	while(wifi_connect() != 0)
 	{
 	}
-  fresh_sensor_info();
+	configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+  	printLocalTime();
+  	fresh_sensor_info();
 	util_timer *t = (util_timer *)malloc(sizeof(util_timer));
 	t->timer_type = SENSOR_HEART_BEAT;
 	t->cb_func = get_timer_func(t->timer_type);
