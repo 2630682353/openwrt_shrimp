@@ -698,13 +698,30 @@ out:
 }
 
 
-int cgi_sys_update_feed_handler(connection_t *con)
+int cgi_sys_update_feed_weight_handler(connection_t *con)
 {	
-	char *feed = con_value_get(con, "feed");
-	if (!feed) {
+	char *feed_weight = con_value_get(con, "feed_weight");
+	char *client_mac = con_value_get(con, "client_mac");
+	char *sensor_pin = con_value_get(con, "sensor_pin");
+	if (!feed_weight || !client_mac || !sensor_pin) {
 		cJSON_AddNumberToObject(con->response, "code", 1);
-		cJSON_AddStringToObject(con->response, "msg", "no feed");
+		cJSON_AddStringToObject(con->response, "msg", "param not right");
 		goto out;
+	}
+	char sql[256] = {0};
+	char *errmsg = NULL;
+	/*snprintf(sql, sizeof(sql) - 1, "INSERT INTO `temper` (client_mac, client_temper_index, temper) "
+		"VALUES(\"%s\",%s,\"%s\");", client_mac, client_temper_index, temper);*/
+
+	snprintf(sql, sizeof(sql) - 1, "INSERT INTO `feed` (client_mac, sensor_pin, feed_weight, pool_id) "
+		"select \"%s\",%s,\"%s\", pool_id from sensor_info where client_mac=%s and sensor_pin=%s;", 
+		client_mac, sensor_pin, temper, client_mac, sensor_pin);
+	if(SQLITE_OK != sqlite3_exec(pdb,sql,NULL,NULL,&errmsg))
+	{
+			CGI_LOG(LOG_ERR, "insert record fail!%s\n",errmsg);
+			cJSON_AddNumberToObject(con->response, "code", 1);
+		cJSON_AddStringToObject(con->response, "msg", errmsg);
+			goto out;
 	}
 
 	cJSON_AddNumberToObject(con->response, "code", 0);
@@ -712,6 +729,51 @@ int cgi_sys_update_feed_handler(connection_t *con)
 out:
 	return 1;
 }
+
+int cgi_sys_query_feed_weight_handler(connection_t *con)
+{	
+	char *period = con_value_get(con, "period");
+	char *client_mac = con_value_get(con, "client_mac");
+	char *sensor_pin = con_value_get(con, "sensor_pin");
+	if (!period || !client_mac || !sensor_pin) {
+		cJSON_AddNumberToObject(con->response, "code", 1);
+		cJSON_AddStringToObject(con->response, "msg", "param not right");
+		goto out;
+	}
+	char sql[256] = {0};
+	char *errmsg = NULL;
+	char condition[128] = {0};
+	if (strcmp(client_mac, "all") != 0)
+	{
+		snprintf(condition, sizeof(condition), " and client_mac='%s' ", client_mac);
+	}
+	if (strcmp(sensor_pin, "all") != 0)
+	{
+		snprintf(condition, sizeof(condition), " and sensor_pin=%s ", sensor_pin);
+	}
+	if (strcmp(period, "recent") == 0)
+	{
+		
+		//snprintf(sql, sizeof(sql) - 1, "select * from `temper` where capture_time between datetime('now','start of day','+1 seconds') "
+		//	"and  datetime('now','start of day','+1 days','-1 seconds') %s", condition);
+		snprintf(sql, sizeof(sql) - 1, "select * from `feed` where capture_time between datetime('now','-1 days', '+1 seconds') "
+			"and  datetime('now','-1 seconds') %s", condition);
+		
+	}
+	cJSON *array = cJSON_CreateArray();
+	//CGI_LOG(LOG_ERR, "sql:%s\n",sql);
+	if(SQLITE_OK != sqlite3_exec(pdb, sql, query_data_to_json,(void *)array, &errmsg))
+	{
+			CGI_LOG(LOG_ERR, "queray fail!%s\n",errmsg);
+			cJSON_AddNumberToObject(con->response, "code", 1);
+			cJSON_AddStringToObject(con->response, "msg", errmsg);
+			goto out;
+	}
+	cJSON_AddNumberToObject(con->response, "code", 0);
+	cJSON_AddItemToObject(con->response, "data", array);
+
+}
+
 
 int cgi_sys_query_temper_handler(connection_t *con)
 {	

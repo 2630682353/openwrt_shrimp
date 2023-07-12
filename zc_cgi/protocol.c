@@ -19,6 +19,9 @@
 #define PRO_UPDATE_LIGHT_LUX "update_light_lux"
 #define PRO_QUERY_LIGHT_LUX "query_light_lux"
 
+#define PRO_UPDATE_FEED_WEIGHT "update_feed_weight"
+#define PRO_QUERY_FEED_WEIGHT "query_feed_weight"
+
 #define PRO_UPDATE_TRANSPARENT "update_transparent"
 #define PRO_QUERY_TRANSPARENT "query_transparent"
 
@@ -58,6 +61,9 @@ extern int cgi_sys_query_transparent_handler(connection_t *con);
 extern int cgi_sys_update_light_lux_handler(connection_t *con);  
 extern int cgi_sys_query_light_lux_handler(connection_t *con);
 
+extern int cgi_sys_update_feed_weight_handler(connection_t *con);
+extern int cgi_sys_query_feed_weight_handler(connection_t *con);
+
 extern int cgi_sys_heart_beat_handler(connection_t *con);
 extern int cgi_sys_add_sensor_info_handler(connection_t *con);
 extern int cgi_sys_delete_sensor_handler(connection_t *con);
@@ -83,6 +89,8 @@ static cgi_protocol_t pro_list[] ={
 	{PRO_QUERY_TEMPER, cgi_sys_query_temper_handler},
 	{PRO_UPDATE_WATER_LEVEL, cgi_sys_update_water_level_handler},
 	{PRO_QUERY_WATER_LEVEL, cgi_sys_query_water_level_handler},
+	{PRO_UPDATE_FEED_WEIGHT, cgi_sys_update_feed_weight_handler},
+	{PRO_QUERY_FEED_WEIGHT, cgi_sys_query_feed_weight_handler},
 	{PRO_HEART_BEAT, cgi_sys_heart_beat_handler},
 	{PRO_ADD_SENSOR, cgi_sys_add_sensor_info_handler},
 	{PRO_DELETE_SENSOR, cgi_sys_delete_sensor_handler},

@@ -6,7 +6,11 @@
 #include <ArduinoJson.h>
 #include <string.h>
 #include "time.h"
-
+#include <LinkedList.h>
+#include "HX711.h"
+const int FEED_WEIGHT_DOUT_PIN = 5;
+const int FEED_WEIGHT_SCK_PIN = 4;
+int TEMPER_PIN = 8;
 
 #define PIN_NUM 40
 #define HEART_BEAT_INTERVAL 10
@@ -17,7 +21,7 @@ String dev_mac = "aa:aa:aa:aa:aa:aa";
 const char* ntpServer = "us.pool.ntp.org";
 const long  gmtOffset_sec = 3600*7;
 const int   daylightOffset_sec = 3600;
-
+HX711 scale;
 
 QueueHandle_t msg_queue;
 LIST_HEAD(my_timer_list);
@@ -26,10 +30,17 @@ enum SENSOR_TYPE
 {
 	SENSOR_TEMPER = 1,
 	SENSOR_FEED,
-	SENSOR_MOTOR,
 	SENSOR_AIR_PRESSURE,
 	SENSOR_WATER_LEVEL,
+	SENSOR_ELEC,
+
+
+	
 	SENSOR_MOTOR_SPECIFY_TIME = 100,
+
+
+
+	
 	SENSOR_HEART_BEAT = 200,
 };
 typedef int (*timer_func)(void *param);
@@ -70,16 +81,49 @@ typedef struct util_timer_st {
 	char other_param[64];
   	char *para;
 	struct list_head list;
+	float feed_weight;
 }util_timer;
 
 static int timer_timeslot;
 static pthread_mutex_t timer_mutex;
 
-unsigned long  calculate_expire(char *time_str)
+unsigned long  calculate_expire(char *time_str_in)
 {
 	unsigned long cur = millis();
+	char time_str[64] = {0};
 	if (strlen(time_str) == 0)
 		return cur+365*24*3600*1000*10;
+	struct tm timeinfo;
+	if(!getLocalTime(&timeinfo)){
+		Serial.println("Failed to obtain time");
+		return cur+1000*60;;
+	}
+	strncpy(time_str, time_str_in, sizeof(time_str));
+	LinkedList<int> time_list = LinkedList<int>();
+	char *outer_ptr = NULL;
+	char *outer_ptr2 = NULL;
+	char *split_str = NULL;
+	char *split_str2 = NULL;
+	int hour = 0, minute = 0;
+	split_str = strtok_r(time_str, ",", &outer_ptr);
+	while(split_str != NULL)
+	{
+		split_str2 = strtok_r(split_str, ":", &outer_ptr2);
+		if (split_str2)
+			hour = atoi(split_str2);
+		split_str2 = strtok_r(split_str, ":", &outer_ptr2);
+		if (split_str2)
+			minute = atoi(split_str2);
+		time_list.add(hour*3600+minute*60);
+	}
+	int now_sec = timeinfo.hour*3600+timeinfo.min*60+timeinfo.sec;
+	for(int i = 0; i < time_list.size(); i++){
+		if (now_sec+1 < time_list.get(i))
+			return cur+(time_list.get(i)-now_sec)*1000;
+		else if(i == time_list.size() - 1)
+			return (24*3600-now_sec+time_list.get(0))*1000;
+	}
+	
 }
 
 
@@ -137,19 +181,64 @@ util_timer* find_timer(int pin)
 
 int sensor_temper_func(void *param)
 {
-  int time = millis();
-  Serial.print(time);
-  Serial.println("int temper func ");
+  float temper = 10.0;
+  String url = "/portal_cgi?opt=update_temper&client_mac="+dev_mac+"&sensor_pin="+FEED_WEIGHT_DOUT_PIN+
+				"&feed_weight="+feed_weight;
+	String out;
+	http_send(url, out);
+  
 }
+
+int sensor_elec_func(void *param)
+{
+  float temper = 10.0;
+  String url = "/portal_cgi?opt=update_temper&client_mac="+dev_mac+"&sensor_pin="+FEED_WEIGHT_DOUT_PIN+
+				"&feed_weight="+feed_weight;
+	String out;
+	http_send(url, out);
+  
+}
+
 int sensor_feed_func(void *param)
 {
-  int time = millis();
-  Serial.print(time);
-  Serial.println("int feed func ");
+  float feed_weight;
+  if (scale.is_ready()) {
+    feed_weight = scale.get_units(10);
+  } else {
+    Serial.println("HX711 not found.");
+	return -1;
+  }
+	String url = "/portal_cgi?opt=update_feed_weight&client_mac="+dev_mac+"&sensor_pin="+FEED_WEIGHT_DOUT_PIN+
+				"&feed_weight="+feed_weight;
+	String out;
+	http_send(url, out);
 }
 int sensor_motor_func(void *param)
 {
   util_timer *p = (util_timer *)param;
+  float before_weight;
+  float after_weight;
+  if (scale.is_ready()) {
+    before_weight = scale.get_units(10);
+  } else {
+    Serial.println("HX711 not found.");
+	return -1;
+  }
+  after_weight = before_weight;
+  motor_start;
+  while(before_weight - after_weight < p->feed_weight)
+  {
+	if (scale.is_ready()) {
+	    after_weight = scale.get_units(10);
+		Serial.println("after_weight:" + after_weight);
+		vTaskDelay(200);
+	} else {
+		Serial.println("HX711 not found.");
+		break;
+	}
+  }
+  motor_end;
+  
 }
 
 
@@ -407,6 +496,9 @@ void task2( void * parameter)
  
 void setup() {
   Serial.begin(115200);
+  scale.begin(FEED_WEIGHT_DOUT_PIN, FEED_WEIGHT_SCK_PIN);
+  scale.set_scale(198.055786);    //只需要改这个值 this value is obtained by calibrating the scale with known weights; see the README for details
+  scale.tare();	
  
   xTaskCreate(
                     main_task,          //指定任务函数，也就是上面那个task1函数
