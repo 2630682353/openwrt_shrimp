@@ -13,12 +13,12 @@ const int FEED_WEIGHT_SCK_PIN = 4;
 int TEMPER_PIN = 8;
 
 #define PIN_NUM 40
-#define HEART_BEAT_INTERVAL 10
+#define HEART_BEAT_INTERVAL 20
 const char* ssid     = "zc_test";
 const char* password = "58285390";
 String dev_mac = "aa:aa:aa:aa:aa:aa";
 
-const char* ntpServer = "us.pool.ntp.org";
+const char* ntpServer = "ntp.aliyun.com";
 const long  gmtOffset_sec = 3600*7;
 const int   daylightOffset_sec = 3600;
 HX711 scale;
@@ -59,16 +59,6 @@ typedef struct msg_item_st
 	int msg_type;
 }msg_item_t;
 
-void printLocalTime()
-{
-  struct tm timeinfo;
-  if(!getLocalTime(&timeinfo)){
-    Serial.println("Failed to obtain time");
-    return;
-  }
-  Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
-}
-
 typedef struct util_timer_st {
 	unsigned long expire;
 	int (*cb_func)(void *para);
@@ -84,14 +74,21 @@ typedef struct util_timer_st {
 	float feed_weight;
 }util_timer;
 
-static int timer_timeslot;
-static pthread_mutex_t timer_mutex;
+void printLocalTime()
+{
+  struct tm timeinfo;
+  if(!getLocalTime(&timeinfo)){
+    Serial.println("Failed to obtain time");
+    return;
+  }
+  Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
+}
 
 unsigned long  calculate_expire(char *time_str_in)
 {
 	unsigned long cur = millis();
 	char time_str[64] = {0};
-	if (strlen(time_str) == 0)
+	if (strlen(time_str_in) == 0)
 		return cur+365*24*3600*1000*10;
 	struct tm timeinfo;
 	if(!getLocalTime(&timeinfo)){
@@ -111,15 +108,18 @@ unsigned long  calculate_expire(char *time_str_in)
 		split_str2 = strtok_r(split_str, ":", &outer_ptr2);
 		if (split_str2)
 			hour = atoi(split_str2);
-		split_str2 = strtok_r(split_str, ":", &outer_ptr2);
+		split_str2 = strtok_r(NULL, ":", &outer_ptr2);
 		if (split_str2)
 			minute = atoi(split_str2);
 		time_list.add(hour*3600+minute*60);
+    split_str = strtok_r(NULL, ",", &outer_ptr);
 	}
-	int now_sec = timeinfo.hour*3600+timeinfo.min*60+timeinfo.sec;
+	int now_sec = timeinfo.tm_hour*3600+timeinfo.tm_min*60+timeinfo.tm_sec;
+  
 	for(int i = 0; i < time_list.size(); i++){
-		if (now_sec+1 < time_list.get(i))
+		if (now_sec+1 < time_list.get(i)){
 			return cur+(time_list.get(i)-now_sec)*1000;
+    }
 		else if(i == time_list.size() - 1)
 			return (24*3600-now_sec+time_list.get(0))*1000;
 	}
@@ -182,8 +182,8 @@ util_timer* find_timer(int pin)
 int sensor_temper_func(void *param)
 {
   float temper = 10.0;
-  String url = "/portal_cgi?opt=update_temper&client_mac="+dev_mac+"&sensor_pin="+FEED_WEIGHT_DOUT_PIN+
-				"&feed_weight="+feed_weight;
+  String url = "/portal_cgi?opt=update_temper&client_mac="+dev_mac+"&sensor_pin="+10+
+				"&temper="+temper;
 	String out;
 	http_send(url, out);
   
@@ -191,9 +191,9 @@ int sensor_temper_func(void *param)
 
 int sensor_elec_func(void *param)
 {
-  float temper = 10.0;
-  String url = "/portal_cgi?opt=update_temper&client_mac="+dev_mac+"&sensor_pin="+FEED_WEIGHT_DOUT_PIN+
-				"&feed_weight="+feed_weight;
+  float elec = 10.0;
+  String url = "/portal_cgi?opt=update_temper&client_mac="+dev_mac+"&sensor_pin="+11+
+				"&feed_weight="+elec;
 	String out;
 	http_send(url, out);
   
@@ -218,6 +218,9 @@ int sensor_motor_func(void *param)
   util_timer *p = (util_timer *)param;
   float before_weight;
   float after_weight;
+  Serial.println("in motor func");
+  printLocalTime();
+  /*
   if (scale.is_ready()) {
     before_weight = scale.get_units(10);
   } else {
@@ -225,19 +228,20 @@ int sensor_motor_func(void *param)
 	return -1;
   }
   after_weight = before_weight;
-  motor_start;
+  //motor_start;
   while(before_weight - after_weight < p->feed_weight)
   {
-	if (scale.is_ready()) {
-	    after_weight = scale.get_units(10);
-		Serial.println("after_weight:" + after_weight);
-		vTaskDelay(200);
-	} else {
-		Serial.println("HX711 not found.");
-		break;
-	}
-  }
-  motor_end;
+    if (scale.is_ready()) {
+        after_weight = scale.get_units(10);
+      Serial.print("after_weight:");
+      Serial.println(after_weight);
+      vTaskDelay(200);
+    } else {
+      Serial.println("HX711 not found.");
+      break;
+    }
+  }*/
+  //motor_end;
   
 }
 
@@ -269,6 +273,9 @@ timer_func get_timer_func(int sensor_type)
 			break;
 		case SENSOR_HEART_BEAT:
 			return sensor_heart_beat;
+			break;
+    case SENSOR_MOTOR_SPECIFY_TIME:
+			return sensor_motor_func;
 			break;
 	}
 	return NULL;
@@ -334,7 +341,7 @@ int report_sensor_info()
 	util_timer *t = NULL;
 	int index = 0;
 	list_for_each_entry(t, &my_timer_list, list) {
-    if (t->timer_type >= 100)
+    if (t->timer_type >= SENSOR_HEART_BEAT)
       continue;
 		json_obj["sensor_array"][index]["id"] = t->id;
 		json_obj["sensor_array"][index]["report_interval"] = t->interval;
@@ -373,6 +380,8 @@ int fresh_sensor_info()
 			t->interval = atoi(json_obj["data"][i]["report_interval"]);
 			strncpy(t->other_param, json_obj["data"][i]["other_param"], sizeof(t->other_param));
 			t->pin = pin;
+      if (t->timer_type >= 100 && t->timer_type < 200)
+        t->expire = calculate_expire(t->other_param);
 		}else
 		{
 			t = (util_timer *)malloc(sizeof(util_timer));
@@ -381,10 +390,14 @@ int fresh_sensor_info()
 			t->timer_type = atoi(json_obj["data"][i]["type"]);
 			t->cb_func = get_timer_func(t->timer_type);
 			t->pin = pin;
-			t->expire = millis() + 20*1000;
+      strncpy(t->other_param, json_obj["data"][i]["other_param"], sizeof(t->other_param));
+      if (t->timer_type >= 100 && t->timer_type < 200)
+        t->expire = calculate_expire(t->other_param);
+      else
+			  t->expire = millis() + 20*1000;
 			t->interval = atoi(json_obj["data"][i]["report_interval"]);
 			t->loop = 1;
-      strncpy(t->other_param, json_obj["data"][i]["other_param"], sizeof(t->other_param));
+      
       Serial.println("5");
 			list_add(&t->list, &my_timer_list);
 		}

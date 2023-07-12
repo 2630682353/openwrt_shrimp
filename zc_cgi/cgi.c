@@ -130,7 +130,7 @@ board_info_t* find_board(char *client_mac)
 			return p;
 		}
 	}
-	return p;
+	return NULL;
 }
 
 #if 0
@@ -1044,7 +1044,7 @@ int cgi_sys_update_sensor_info_handler(connection_t *con)
 		goto out;
 	}
 	
-	snprintf(sql, sizeof(sql) - 1, "update `sensor_info` set type=%d, pool_id=%d, report_interval=%d, other_param=%s where "
+	snprintf(sql, sizeof(sql) - 1, "update `sensor_info` set type=%d, pool_id=%d, report_interval=%d, other_param='%s' where "
 		"id=%s", atoi(sensor_type),  atoi(pool_id),  atoi(report_interval), 
 		other_param, sensor_id);
 	if(SQLITE_OK != sqlite3_exec(pdb,sql,NULL,NULL,&errmsg))
@@ -1172,6 +1172,12 @@ int cgi_board_report_board_sensor_info(connection_t *con)
 	}
 
 	cJSON *sensor_array = cJSON_GetObjectItem(root, "sensor_array");
+	if (sensor_array == NULL)
+	{
+		cJSON_AddNumberToObject(con->response, "code", 1);
+		cJSON_AddStringToObject(con->response, "msg", "sensor_array is null");
+		goto out;
+	}
 	cJSON *array_item = NULL, *item = NULL;
 	int sensor_num = cJSON_GetArraySize(sensor_array);
 	for (int i=0; i < sensor_num; i++)

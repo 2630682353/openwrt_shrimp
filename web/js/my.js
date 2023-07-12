@@ -12,7 +12,7 @@ function show_div(str_src, str_menu){
     document.getElementById(str_menu).style.color="#0091db";
     current_menu = str_menu;
 	//current = str_div;
-    $('#first').html("<iframe id='iframe' src='"+str_src+"' width='1000px' height='1000px'></iframe>");
+    $('#first').html("<iframe id='iframe' src='"+str_src+"' width='1500px' height='1000px'></iframe>");
 }
 
 function gettime() {
