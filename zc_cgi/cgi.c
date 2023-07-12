@@ -86,6 +86,7 @@ int query_multi_result(char *sql, char *out[])
 		return -1;
 	for (i=0;i < nRow; i++)
 	{
+		CGI_LOG(LOG_ERR, "result %s\n",dbResult[i]);
 		strncpy(out[i], dbResult[i], 32);
 	}
 	sqlite3_free_table(dbResult);
@@ -715,7 +716,7 @@ int cgi_sys_update_feed_weight_handler(connection_t *con)
 
 	snprintf(sql, sizeof(sql) - 1, "INSERT INTO `feed` (client_mac, sensor_pin, feed_weight, pool_id) "
 		"select \"%s\",%s,\"%s\", pool_id from sensor_info where client_mac=%s and sensor_pin=%s;", 
-		client_mac, sensor_pin, temper, client_mac, sensor_pin);
+		client_mac, sensor_pin, feed_weight, client_mac, sensor_pin);
 	if(SQLITE_OK != sqlite3_exec(pdb,sql,NULL,NULL,&errmsg))
 	{
 			CGI_LOG(LOG_ERR, "insert record fail!%s\n",errmsg);
@@ -771,6 +772,8 @@ int cgi_sys_query_feed_weight_handler(connection_t *con)
 	}
 	cJSON_AddNumberToObject(con->response, "code", 0);
 	cJSON_AddItemToObject(con->response, "data", array);
+out:
+	return 1;
 
 }
 

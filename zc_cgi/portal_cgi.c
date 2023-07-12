@@ -24,7 +24,7 @@ int cgi_init()
 
 
 struct list_head board_list;
-extern int query_multi_result(char *sql, char out[][]);
+extern int query_multi_result(char *sql, char *out[]);
 
 char board_mac[30][32];
 
@@ -75,11 +75,14 @@ reply_print:
 		}
 
 	}
+	CGI_LOG(LOG_ERR,"1");
 	for (int i=0;i < 30;i++)
 	{
 		memset(board_mac[i], 0, 32);
 	}
+	CGI_LOG(LOG_ERR,"2");
 	int num = query_multi_result("select distinct client_mac from sensor_info", board_mac);
+	CGI_LOG(LOG_ERR,"3");
 	INIT_LIST_HEAD(&board_list);
 	for (int i = 0; i < num;i++)
 	{
@@ -87,8 +90,9 @@ reply_print:
 		memset(board, 0, sizeof(board));
 		strncpy(board->mac, board_mac[i], 32);
 		list_add(&board->board_list, &board_list);
-		CGI_LOG("board_mac:%s", board->mac);
+		CGI_LOG(LOG_ERR,"board_mac:%s", board->mac[i]);
 	}
+	CGI_LOG(LOG_ERR,"4");
 	while(FCGI_Accept() >= 0)
 	{
 		//cgi_init();
