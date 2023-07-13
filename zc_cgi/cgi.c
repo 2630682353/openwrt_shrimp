@@ -73,7 +73,7 @@ int query_table(char *sql, int r, int c)
         return result;
     }
 }
-int query_multi_result(char *sql, char *out[])
+int query_multi_result(char *sql, char *out)
 {
 	char *errMsg;
     char **dbResult;
@@ -86,8 +86,7 @@ int query_multi_result(char *sql, char *out[])
 		return -1;
 	for (i=0;i < nRow; i++)
 	{
-		CGI_LOG(LOG_ERR, "result %s\n",dbResult[i]);
-		strncpy(out[i], dbResult[i], 32);
+		strncpy(&out[i*32], dbResult[i+1], 32);
 	}
 	sqlite3_free_table(dbResult);
     return nRow;
@@ -954,7 +953,7 @@ int cgi_sys_add_sensor_info_handler(connection_t *con)
 
 	snprintf(sql, sizeof(sql), "select count(*) from sensor_info where client_mac='%s' and sensor_pin=%s;",
 	client_mac, sensor_pin);
-	if (query_table(sql, 0,0) > 0)
+	if (query_table(sql, 1,0) > 0)
 	{
 		cJSON_AddNumberToObject(con->response, "code", 1);
 		cJSON_AddStringToObject(con->response, "msg", "sensor pin exist");
