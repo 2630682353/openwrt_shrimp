@@ -58,4 +58,12 @@ create table `feed` (
 	`pool_id` int(4)
 );
 
+create table `pool` (
+	`id` integer primary key autoincrement,
+	`area`	varchar(8),
+	`deep`  	varchar(8),
+	`shrimp_num`	integer DEFAULT 0,
+       	`start_feed_time` timestamp,
+);
+
 create unique index sensor_index on sensor_info(client_mac, sensor_pin);

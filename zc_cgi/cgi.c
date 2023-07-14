@@ -820,30 +820,57 @@ out:
 
 int cgi_sys_query_last_data_handler(connection_t *con)
 {	
-	char *table = con_value_get(con, "table");
-	char *client_mac = con_value_get(con, "client_mac");
-	char *sensor_pin = con_value_get(con, "sensor_pin");
-	if (!table || !client_mac || !sensor_pin) {
+	char *table_list = con_value_get(con, "table_list");
+	
+	if (!table_list) {
 		cJSON_AddNumberToObject(con->response, "code", 1);
 		cJSON_AddStringToObject(con->response, "msg", "param not right");
 		goto out;
 	}
 	char sql[256] = {0};
 	char *errmsg = NULL;
-	
-	snprintf(sql, sizeof(sql) - 1, "select * from %s where clinet_mac='%s' and sensor_pin=%s order by id desc limit 1"
-		, table, client_mac, sensor_pin);
-		
-	cJSON *array = cJSON_CreateArray();
-	if(SQLITE_OK != sqlite3_exec(pdb, sql, query_data_to_json,(void *)array, &errmsg))
+	cJSON *root = cJSON_Parse(table_list);
+	if (!root)
 	{
-			CGI_LOG(LOG_ERR, "queray fail!%s\n",errmsg);
-			cJSON_AddNumberToObject(con->response, "code", 1);
-			cJSON_AddStringToObject(con->response, "msg", errmsg);
-			goto out;
+		cJSON_AddNumberToObject(con->response, "code", 1);
+		cJSON_AddStringToObject(con->response, "msg", "json_parse error");
+		goto out;
+	}
+	cJSON *table_array = cJSON_GetObjectItem(root, "table_array");
+	if (table_array == NULL)
+	{
+		cJSON_AddNumberToObject(con->response, "code", 1);
+		cJSON_AddStringToObject(con->response, "msg", "table_array is null");
+		goto out;
+	}
+	
+		
+	cJSON *array_item = NULL, *item = NULL;
+	cJSON *array = cJSON_CreateArray();
+	int table_num = cJSON_GetArraySize(table_array);
+	char *table, *client_mac, *sensor_pin;
+	for (int i=0; i < table_num; i++)
+	{
+		array_item = cJSON_GetArrayItem(table_array, i);
+		item = cJSON_GetObjectItem(array_item, "table");
+		table = item->valuestring;
+		item = cJSON_GetObjectItem(array_item, "client_mac");
+		client_mac = item->valuestring;
+		item = cJSON_GetObjectItem(array_item, "sensor_pin");
+		sensor_pin = item->valuestring;
+		snprintf(sql, sizeof(sql) - 1, "select * from %s where clinet_mac='%s' and sensor_pin=%s order by id desc limit 1"
+		, table, client_mac, sensor_pin);
+		if(SQLITE_OK != sqlite3_exec(pdb, sql, query_data_to_json,(void *)array, &errmsg))
+		{
+				CGI_LOG(LOG_ERR, "queray fail!%s\n",errmsg);
+				cJSON_AddNumberToObject(con->response, "code", 1);
+				cJSON_AddStringToObject(con->response, "msg", errmsg);
+				goto out;
+		}
+
 	}
 	cJSON_AddNumberToObject(con->response, "code", 0);
-	cJSON_AddItemToObject(con->response, table, array);
+	cJSON_AddItemToObject(con->response, "last_data", array);
 
 out:
 	return 1;
