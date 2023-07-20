@@ -14,6 +14,7 @@ int TEMPER_PIN = 8;
 
 #define PIN_NUM 40
 #define HEART_BEAT_INTERVAL 20
+#define REPORT_SENSOR_INFO_INTERVAL 3600
 const char* ssid     = "zc_test";
 const char* password = "58285390";
 String dev_mac = "aa:aa:aa:aa:aa:aa";
@@ -42,6 +43,7 @@ enum SENSOR_TYPE
 
 	
 	SENSOR_HEART_BEAT = 200,
+	SENSOR_REPORT_SENSOR_INFO = 201,
 };
 typedef int (*timer_func)(void *param);
 
@@ -334,7 +336,7 @@ int http_send(String url, String &out)
   return 0;
 }
 
-int report_sensor_info()
+int report_sensor_info(void *param)
 {
 	String url = "/portal_cgi?opt=report_board_sensor&client_mac="+dev_mac+"&sensor_json=";
 	DynamicJsonDocument json_obj(1024);
@@ -406,7 +408,7 @@ int fresh_sensor_info()
 	util_timer *p = NULL;
 	util_timer *n = NULL;
 	list_for_each_entry_safe(p, n, &my_timer_list, list) {
-		if (p->timer_type == SENSOR_HEART_BEAT)
+		if (p->timer_type >= SENSOR_HEART_BEAT)
 			continue;
 		int exist = 0;
 		for (int i = 0; i < json_obj["data"].size(); i++)
@@ -423,7 +425,7 @@ int fresh_sensor_info()
 			free(p);
 		}			
 	}
-	report_sensor_info();
+	report_sensor_info(NULL);
 	return 0;
 }
 
@@ -475,6 +477,16 @@ void main_task( void * parameter )
 	t->interval = HEART_BEAT_INTERVAL;
 	t->loop = 1;
 	list_add(&t->list, &my_timer_list);
+
+	util_timer *t2 = (util_timer *)malloc(sizeof(util_timer));
+	t2->timer_type = SENSOR_REPORT_SENSOR_INFO;
+	t2->cb_func = report_sensor_info;
+	t2->pin = 201;
+	t2->expire = millis() + REPORT_SENSOR_INFO_INTERVAL*1000;
+	t2->interval = REPORT_SENSOR_INFO_INTERVAL;
+	t2->loop = 1;
+	list_add(&t2->list, &my_timer_list);
+
   int cmds[100];
   int ret = 0;
 	while (1)
