@@ -29,12 +29,15 @@ public class MainActivity extends AppCompatActivity {
     private int id_offset = 3;
     private GridLayout gridLayout;
     private SharedPreferences sp;
+	private int response_success = 0;
+	private int response_error = 0;
+	private String request_url;
     private Handler mHandler = new Handler(Looper.myLooper()){
         @Override
         public void handleMessage(@NonNull Message msg) {
             super.handleMessage(msg);
-            TextView txtData2=findViewById(R.id.tv10);
-            txtData2.setText(msg.obj.toString());
+            TextView tvHttpResponse=findViewById(R.id.tvHttpResponse);
+            tvHttpResponse.setText(response_success+":"+response_error+" "+request_url+msg.obj.toString());
         }
     };
     public void freshMap(){
@@ -152,12 +155,13 @@ public class MainActivity extends AppCompatActivity {
                         jsonRoot.put("table_array", table_array);
                         url = "http://192.168.10.105/portal_cgi?opt=query_last_data&table_list=" + jsonRoot.toString();
 
-                        String test = NetUtil.doGet(url);
+                        String response = NetUtil.doGet(url);
+						request_url = url;
                         Message msg = new Message();
                         msg.what = 0;
-                        msg.obj = test+url;
+                        msg.obj = response;
                         mHandler.sendMessage(msg);
-                        Thread.sleep(5000);
+						response_success++;
 
                     } catch (Exception e) {
                         e.printStackTrace();
@@ -166,7 +170,9 @@ public class MainActivity extends AppCompatActivity {
                         msg.what = 1;
                         msg.obj = test;
                         mHandler.sendMessage(msg);
+						response_error++;
                     }
+					Thread.sleep(10000);
                 }
             }
         });
@@ -186,6 +192,9 @@ public class MainActivity extends AppCompatActivity {
         Toast.makeText(this, "save success", Toast.LENGTH_SHORT).show();
     }
     public void resetData(View view) {
+
+    }
+	public void showURL(View view) {
 
     }
     public void enableData(View view) {
