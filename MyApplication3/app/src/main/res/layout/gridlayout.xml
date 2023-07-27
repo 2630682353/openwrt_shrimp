@@ -6,33 +6,7 @@
     android:columnCount="8"
 
     android:rowCount="12">
-    <Button
-        android:id="@+id/buttonURL"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_row="10"
-        android:layout_columnSpan="8"
-        android:text="showURL" />
 
-    <TextView
-        android:id="@+id/tvAlert"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_row="10"
-        android:text="TextView" />
-    <Button
-        android:id="@+id/buttonReset"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_row="10"
-        android:text="reset" />
-    <Button
-        android:id="@+id/buttonEnable"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_row="10"
-        android:layout_columnSpan="8"
-        android:text="enable" />
     <AutoCompleteTextView
         android:id="@+id/tvHttpResponse"
         android:layout_width="wrap_content"

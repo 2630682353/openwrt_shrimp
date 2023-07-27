@@ -4,11 +4,18 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
+import android.annotation.SuppressLint;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
+import android.util.Log;
 import android.view.View;
 import android.widget.AutoCompleteTextView;
 import android.widget.Button;
@@ -18,6 +25,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.HashMap;
@@ -32,12 +40,64 @@ public class MainActivity extends AppCompatActivity {
 	private int response_success = 0;
 	private int response_error = 0;
 	private String request_url;
+    private BroadcastReceiver broadcastReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            Message msg = new Message();
+            msg.what = intent.getIntExtra("type", 1);
+            msg.obj = intent.getStringExtra("data");
+
+            mHandler.sendMessage(msg);
+            response_success = intent.getIntExtra("response_success", response_success);
+            response_error = intent.getIntExtra("response_error", response_error);
+            request_url = intent.getStringExtra("url");
+        }
+    };
+
+
     private Handler mHandler = new Handler(Looper.myLooper()){
         @Override
         public void handleMessage(@NonNull Message msg) {
             super.handleMessage(msg);
             TextView tvHttpResponse=findViewById(R.id.tvHttpResponse);
-            tvHttpResponse.setText(response_success+":"+response_error+" "+request_url+msg.obj.toString());
+
+            tvHttpResponse.setText(response_success+":"+response_error+" "+msg.obj.toString());
+            if (msg.what == 0){
+                String response_json = msg.obj.toString();
+                try {
+                    JSONObject jsonObject=new JSONObject(response_json);
+                    if (jsonObject.getInt("code") == 0)
+                    {
+                        JSONArray jsonArray = jsonObject.getJSONArray("last_data");
+                        for(int i=0;i<jsonArray.length();i++){
+                            JSONObject item = jsonArray.getJSONObject(i);
+                            float value =0f;
+                            SensorData sensorData = hashMap.get(item.getString("client_mac")+
+                                    item.getString("sensor_pin"));
+                            if (sensorData == null) {
+                                return;
+                            }
+                            if (item.has("temper")) {
+                                value = Float.parseFloat(item.getString("temper"));
+                            }else if(item.has("air_pressure")){
+                                value = Float.parseFloat(item.getString("air_pressure"));
+                            }
+                            TextView tv=findViewById(sensorData.show_value_id);
+                            tv.setText(value+"");
+                            if (sensorData.min_value > value || sensorData.max_value < value){
+                                findViewById(sensorData.alert_id).setBackgroundColor(Color.RED);
+                            }
+                        }
+
+                    }
+                    else{
+                        response_error++;
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    response_error++;
+                }
+            }
         }
     };
     public void freshMap(){
@@ -51,8 +111,17 @@ public class MainActivity extends AppCompatActivity {
             sensorData.min_value = Integer.parseInt(sp.getString(new Integer(i*100*2+3+id_offset).toString(), "0"));
             sensorData.max_value = Integer.parseInt(sp.getString(new Integer(i*100*2+4+id_offset).toString(), "0"));
             sensorData.enable = sp.getString(new Integer((i*2+1)*100+3+id_offset).toString(), "disable");
+            sensorData.alert_id = (i*2+1)*100+1+id_offset;
+            sensorData.show_value_id = (i*2+1)*100+4+id_offset;
             hashMap.put(sensorData.client_mac+sensorData.sensor_pin, sensorData);
         }
+        Intent intent = new Intent("com.example.zc.broadcast");
+        SerialHashMap serialHashMap = new SerialHashMap();
+        serialHashMap.setMap(hashMap);
+        Bundle bundle = new Bundle();
+        bundle.putSerializable("map", serialHashMap);
+        intent.putExtras(bundle);
+        sendBroadcast(intent);
     }
     public GridLayout.LayoutParams getGridSpec(int row, int col){
         //使用Spec定义子控件的位置和比重
@@ -119,6 +188,51 @@ public class MainActivity extends AppCompatActivity {
         tv.setLayoutParams(getGridSpec(row, 4));
         gridLayout.addView(tv);
     }
+
+    @SuppressLint("ResourceType")
+    public void createMainButton(int row) {
+        Button saveButton = new Button(this);
+        saveButton.setText("URL");
+        saveButton.setId(9000);
+        saveButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                //提交数据
+                showURL(v);
+            }
+        });
+        saveButton.setLayoutParams(getGridSpec(row, 0));
+        gridLayout.addView(saveButton);
+        Button alertButton = new Button(this);
+        alertButton.setText("告警");
+        alertButton.setId(9001);
+        alertButton.setLayoutParams(getGridSpec(row, 1));
+        gridLayout.addView(alertButton);
+        Button resetButton = new Button(this);
+        resetButton.setText("重置");
+        resetButton.setId(9002);
+        resetButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                //提交数据
+                resetData(v);
+            }
+        });
+        resetButton.setLayoutParams(getGridSpec(row, 2));
+        gridLayout.addView(resetButton);
+        Button enableButton = new Button(this);
+        enableButton.setText(sp.getString("9003", "disable"));
+        enableButton.setId(9003);
+        enableButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                //提交数据
+                enableData(v);
+            }
+        });
+        enableButton.setLayoutParams(getGridSpec(row, 3));
+        gridLayout.addView(enableButton);
+    }
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -133,16 +247,20 @@ public class MainActivity extends AppCompatActivity {
             }
             createLineButton(i*2+1);
         }
-        freshMap();
-
+        registerReceiver(broadcastReceiver, new IntentFilter("com.example.http_response.broadcast"));
+        createMainButton(10);
+        Intent intent = new Intent(this, MyService.class);
+        startService(intent);
+/*
         Thread thread = new Thread(new Runnable() {
             @Override
             public void run() {
                 while (true) {
                     try {
+                        Thread.sleep(5000);
                         JSONArray table_array = new JSONArray();
                         for (SensorData value : hashMap.values()) {
-                            if (value.enable == "enable") {
+                            if (value.enable.equals("enable")) {
                                 JSONObject jsonObject = new JSONObject();
                                 jsonObject.put("client_mac", value.client_mac);
                                 jsonObject.put("sensor_pin", value.sensor_pin);
@@ -172,11 +290,15 @@ public class MainActivity extends AppCompatActivity {
                         mHandler.sendMessage(msg);
 						response_error++;
                     }
-					Thread.sleep(10000);
                 }
             }
         });
        thread.start();
+ */
+        new Handler().postDelayed(new Runnable() {
+            public void run() {
+                freshMap();
+            }}, 5000);
     }
     public void commitData(View view) {
         //Toast.makeText(this, "in displa"+view.getId(), Toast.LENGTH_SHORT).show();
@@ -192,16 +314,19 @@ public class MainActivity extends AppCompatActivity {
         Toast.makeText(this, "save success", Toast.LENGTH_SHORT).show();
     }
     public void resetData(View view) {
-
+        @SuppressLint("ResourceType") int alert_id = view.getId() - 1;
+        findViewById(alert_id).setBackgroundColor(Color.GREEN);
     }
 	public void showURL(View view) {
-
+        AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
+        builder.setMessage(request_url);
+        builder.show();
     }
     public void enableData(View view) {
         Button button = (Button) view;
-        if(button.getText().toString() == "disable")
+        if(button.getText().toString().equals("disable"))
             button.setText("enable");
-        else if(button.getText().toString() == "enable")
+        else if(button.getText().toString().equals("enable"))
             button.setText("disable");
         SharedPreferences.Editor editor = sp.edit();
         editor.putString(new Integer(button.getId()).toString(), button.getText().toString());
