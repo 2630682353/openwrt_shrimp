@@ -800,8 +800,8 @@ int cgi_sys_query_temper_handler(connection_t *con)
 	}
 	if (strcmp(period, "recent") == 0)
 	{
-		snprintf(sql, sizeof(sql) - 1, "select * from `temper` where capture_time between datetime('now','-1 days', '+1 seconds') "
-			"and  datetime('now','-1 seconds') %s", condition);
+		snprintf(sql, sizeof(sql) - 1, "select * from `temper` where capture_time between datetime('now','-1 days', '+1 seconds', 'local_time') "
+			"and  datetime('now','-1 seconds', 'local_time') %s", condition);
 		
 	}
 	cJSON *array = cJSON_CreateArray();
