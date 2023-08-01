@@ -183,19 +183,31 @@ util_timer* find_timer(int pin)
 
 int sensor_temper_func(void *param)
 {
-  float temper = 10.0;
-  String url = "/portal_cgi?opt=update_temper&client_mac="+dev_mac+"&sensor_pin="+10+
+  util_timer *p_timer = (util_timer *)param;
+  float temper = millis()%10 + 10.0;
+  String url = "/portal_cgi?opt=update_temper&client_mac="+dev_mac+"&sensor_pin="+p_timer->pin+
 				"&temper="+temper;
 	String out;
 	http_send(url, out);
   
 }
 
+int sensor_water_level_func(void *param)
+{
+  util_timer *p_timer = (util_timer *)param;
+  float water_level = millis()%10 + 10.0;
+  String url = "/portal_cgi?opt=update_water_level&client_mac="+dev_mac+"&sensor_pin="+p_timer->pin+
+				"&water_level="+water_level;
+	String out;
+	http_send(url, out);
+}
+
 int sensor_elec_func(void *param)
 {
-  float elec = 10.0;
-  String url = "/portal_cgi?opt=update_temper&client_mac="+dev_mac+"&sensor_pin="+11+
-				"&feed_weight="+elec;
+  util_timer *p_timer = (util_timer *)param;
+  float elec = millis()%10 + 100.0;
+  String url = "/portal_cgi?opt=update_elec&client_mac="+dev_mac+"&sensor_pin="+p_timer->pin+
+				"&elec="+elec;
 	String out;
 	http_send(url, out);
   
@@ -273,6 +285,12 @@ timer_func get_timer_func(int sensor_type)
 		case SENSOR_TEMPER:
 			return sensor_temper_func;
 			break;
+    case SENSOR_WATER_LEVEL:
+			return sensor_water_level_func;
+			break;
+    case SENSOR_ELEC:
+      return sensor_elec_func;
+      break;
 		case SENSOR_HEART_BEAT:
 			return sensor_heart_beat;
 			break;
@@ -367,7 +385,7 @@ int fresh_sensor_info()
 
 	http_send(url, out);
 	String json_str;
-	DynamicJsonDocument json_obj(1024);
+	DynamicJsonDocument json_obj(4096);
 	deserializeJson(json_obj, out);
 
 	util_timer *t = NULL;
