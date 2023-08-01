@@ -599,7 +599,7 @@ int cgi_sys_update_temper_handler(connection_t *con)
 		"VALUES(\"%s\",%s,\"%s\");", client_mac, client_temper_index, temper);*/
 
 	snprintf(sql, sizeof(sql) - 1, "INSERT INTO `temper` (client_mac, sensor_pin, temper, pool_id) "
-		"select \"%s\",%s,\"%s\", pool_id from sensor_info where client_mac=%s and sensor_pin=%s;", 
+		"select \"%s\",%s,\"%s\", pool_id from sensor_info where client_mac='%s' and sensor_pin=%s;", 
 		client_mac, sensor_pin, temper, client_mac, sensor_pin);
 	if(SQLITE_OK != sqlite3_exec(pdb,sql,NULL,NULL,&errmsg))
 	{
@@ -620,18 +620,30 @@ out:
 int cgi_sys_update_elec_handler(connection_t *con)
 {	
 	char *elec = con_value_get(con, "elec");
-	if (!elec) {
+	char *client_mac = con_value_get(con, "client_mac");
+	char *sensor_pin = con_value_get(con, "sensor_pin");
+	if (!elec || !client_mac || !sensor_pin) {
 		cJSON_AddNumberToObject(con->response, "code", 1);
-		cJSON_AddStringToObject(con->response, "msg", "no elec");
+		cJSON_AddStringToObject(con->response, "msg", "param not right");
 		goto out;
 	}
+	char sql[256] = {0};
+	char *errmsg = NULL;
+	/*snprintf(sql, sizeof(sql) - 1, "INSERT INTO `temper` (client_mac, client_temper_index, temper) "
+		"VALUES(\"%s\",%s,\"%s\");", client_mac, client_temper_index, temper);*/
 
-	
-//	if (cgi_snd_msg(MSG_CMD_MANAGE_STOP_APP, app, strlen(app) + 1, NULL, NULL) == 0) {
+	snprintf(sql, sizeof(sql) - 1, "INSERT INTO `elec` (client_mac, sensor_pin, elec, pool_id) "
+		"select \"%s\",%s,\"%s\", pool_id from sensor_info where client_mac='%s' and sensor_pin=%s;", 
+		client_mac, sensor_pin, elec, client_mac, sensor_pin);
+	if(SQLITE_OK != sqlite3_exec(pdb,sql,NULL,NULL,&errmsg))
+	{
+			CGI_LOG(LOG_ERR, "insert record fail!%s\n",errmsg);
+			cJSON_AddNumberToObject(con->response, "code", 1);
+		cJSON_AddStringToObject(con->response, "msg", errmsg);
+			goto out;
+	}
 	cJSON_AddNumberToObject(con->response, "code", 0);
-//	} else {
-//		cJSON_AddNumberToObject(con->response, "code", 1);
-//	}
+
 out:
 	return 1;
 }
@@ -640,38 +652,70 @@ int cgi_sys_query_elec_handler(connection_t *con)
 {	
 	char *period = con_value_get(con, "period");
 	char *client_mac = con_value_get(con, "client_mac");
-	char *client_temper_index = con_value_get(con, "client_temper_index");
-	/*if (!elec) {
+	char *sensor_pin = con_value_get(con, "sensor_pin");
+	if (!period || !client_mac || !sensor_pin) {
 		cJSON_AddNumberToObject(con->response, "code", 1);
-		cJSON_AddStringToObject(con->response, "msg", "no elec");
+		cJSON_AddStringToObject(con->response, "msg", "param not right");
 		goto out;
-	}*/
-
-	
-//	if (cgi_snd_msg(MSG_CMD_MANAGE_STOP_APP, app, strlen(app) + 1, NULL, NULL) == 0) {
+	}
+	char sql[256] = {0};
+	char *errmsg = NULL;
+	char condition[128] = {0};
+	if (strcmp(client_mac, "all") != 0)
+	{
+		snprintf(condition, sizeof(condition), " and client_mac='%s' ", client_mac);
+	}
+	if (strcmp(sensor_pin, "all") != 0)
+	{
+		snprintf(condition, sizeof(condition), " and sensor_pin=%s ", sensor_pin);
+	}
+	if (strcmp(period, "recent") == 0)
+	{
+		snprintf(sql, sizeof(sql) - 1, "select * from `elec` where capture_time between datetime('now','-1 days', '+1 seconds', 'localtime') "
+			"and  datetime('now','-1 seconds', 'localtime') %s", condition);
+		
+	}
+	cJSON *array = cJSON_CreateArray();
+	if(SQLITE_OK != sqlite3_exec(pdb, sql, query_data_to_json,(void *)array, &errmsg))
+	{
+			CGI_LOG(LOG_ERR, "queray fail!%s\n",errmsg);
+			cJSON_AddNumberToObject(con->response, "code", 1);
+			cJSON_AddStringToObject(con->response, "msg", errmsg);
+			goto out;
+	}
 	cJSON_AddNumberToObject(con->response, "code", 0);
-//	} else {
-//		cJSON_AddNumberToObject(con->response, "code", 1);
-//	}
+	cJSON_AddItemToObject(con->response, "data", array);
 out:
 	return 1;
 }
 
 int cgi_sys_update_water_level_handler(connection_t *con)
 {	
-	char *elec = con_value_get(con, "elec");
-	if (!elec) {
+	char *water_level = con_value_get(con, "water_level");
+	char *client_mac = con_value_get(con, "client_mac");
+	char *sensor_pin = con_value_get(con, "sensor_pin");
+	if (!water_level || !client_mac || !sensor_pin) {
 		cJSON_AddNumberToObject(con->response, "code", 1);
-		cJSON_AddStringToObject(con->response, "msg", "no elec");
+		cJSON_AddStringToObject(con->response, "msg", "param not right");
 		goto out;
 	}
+	char sql[256] = {0};
+	char *errmsg = NULL;
+	/*snprintf(sql, sizeof(sql) - 1, "INSERT INTO `temper` (client_mac, client_temper_index, temper) "
+		"VALUES(\"%s\",%s,\"%s\");", client_mac, client_temper_index, temper);*/
 
-	
-//	if (cgi_snd_msg(MSG_CMD_MANAGE_STOP_APP, app, strlen(app) + 1, NULL, NULL) == 0) {
+	snprintf(sql, sizeof(sql) - 1, "INSERT INTO `water_level` (client_mac, sensor_pin, water_level, pool_id) "
+		"select \"%s\",%s,\"%s\", pool_id from sensor_info where client_mac='%s' and sensor_pin=%s;", 
+		client_mac, sensor_pin, water_level, client_mac, sensor_pin);
+	if(SQLITE_OK != sqlite3_exec(pdb,sql,NULL,NULL,&errmsg))
+	{
+			CGI_LOG(LOG_ERR, "insert record fail!%s\n",errmsg);
+			cJSON_AddNumberToObject(con->response, "code", 1);
+		cJSON_AddStringToObject(con->response, "msg", errmsg);
+			goto out;
+	}
 	cJSON_AddNumberToObject(con->response, "code", 0);
-//	} else {
-//		cJSON_AddNumberToObject(con->response, "code", 1);
-//	}
+
 out:
 	return 1;
 }
@@ -680,19 +724,39 @@ int cgi_sys_query_water_level_handler(connection_t *con)
 {	
 	char *period = con_value_get(con, "period");
 	char *client_mac = con_value_get(con, "client_mac");
-	char *client_temper_index = con_value_get(con, "client_temper_index");
-	/*if (!elec) {
+	char *sensor_pin = con_value_get(con, "sensor_pin");
+	if (!period || !client_mac || !sensor_pin) {
 		cJSON_AddNumberToObject(con->response, "code", 1);
-		cJSON_AddStringToObject(con->response, "msg", "no elec");
+		cJSON_AddStringToObject(con->response, "msg", "param not right");
 		goto out;
-	}*/
-
-	
-//	if (cgi_snd_msg(MSG_CMD_MANAGE_STOP_APP, app, strlen(app) + 1, NULL, NULL) == 0) {
+	}
+	char sql[256] = {0};
+	char *errmsg = NULL;
+	char condition[128] = {0};
+	if (strcmp(client_mac, "all") != 0)
+	{
+		snprintf(condition, sizeof(condition), " and client_mac='%s' ", client_mac);
+	}
+	if (strcmp(sensor_pin, "all") != 0)
+	{
+		snprintf(condition, sizeof(condition), " and sensor_pin=%s ", sensor_pin);
+	}
+	if (strcmp(period, "recent") == 0)
+	{
+		snprintf(sql, sizeof(sql) - 1, "select * from `water_level` where capture_time between datetime('now','-1 days', '+1 seconds', 'localtime') "
+			"and  datetime('now','-1 seconds', 'localtime') %s", condition);
+		
+	}
+	cJSON *array = cJSON_CreateArray();
+	if(SQLITE_OK != sqlite3_exec(pdb, sql, query_data_to_json,(void *)array, &errmsg))
+	{
+			CGI_LOG(LOG_ERR, "queray fail!%s\n",errmsg);
+			cJSON_AddNumberToObject(con->response, "code", 1);
+			cJSON_AddStringToObject(con->response, "msg", errmsg);
+			goto out;
+	}
 	cJSON_AddNumberToObject(con->response, "code", 0);
-//	} else {
-//		cJSON_AddNumberToObject(con->response, "code", 1);
-//	}
+	cJSON_AddItemToObject(con->response, "data", array);
 out:
 	return 1;
 }
@@ -800,8 +864,8 @@ int cgi_sys_query_temper_handler(connection_t *con)
 	}
 	if (strcmp(period, "recent") == 0)
 	{
-		snprintf(sql, sizeof(sql) - 1, "select * from `temper` where capture_time between datetime('now','-1 days', '+1 seconds', 'local_time') "
-			"and  datetime('now','-1 seconds', 'local_time') %s", condition);
+		snprintf(sql, sizeof(sql) - 1, "select * from `temper` where capture_time between datetime('now','-1 days', '+1 seconds', 'localtime') "
+			"and  datetime('now','-1 seconds', 'localtime') %s", condition);
 		
 	}
 	cJSON *array = cJSON_CreateArray();
@@ -858,7 +922,7 @@ int cgi_sys_query_last_data_handler(connection_t *con)
 		client_mac = item->valuestring;
 		item = cJSON_GetObjectItem(array_item, "sensor_pin");
 		sensor_pin = item->valuestring;
-		snprintf(sql, sizeof(sql) - 1, "select * from %s where clinet_mac='%s' and sensor_pin=%s order by id desc limit 1"
+		snprintf(sql, sizeof(sql) - 1, "select * from %s where client_mac='%s' and sensor_pin=%s order by id desc limit 1"
 		, table, client_mac, sensor_pin);
 		if(SQLITE_OK != sqlite3_exec(pdb, sql, query_data_to_json,(void *)array, &errmsg))
 		{

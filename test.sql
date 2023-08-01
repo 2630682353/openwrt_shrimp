@@ -7,6 +7,15 @@ create table `temper` (
 	`pool_id` int(4)
 );
 
+create table `air_pressure` (
+	`id` integer primary key autoincrement,
+	`client_mac`	varchar(64) NOT NULL,
+	`sensor_pin`  int(4) not null,
+	`air_pressure`	varchar(8),
+       	`capture_time` timestamp NOT NULL DEFAULT (datetime('now','localtime')),
+	`pool_id` int(4)
+);
+
 create table `sensor_info`(
 	`id` integer primary key autoincrement,
 	`client_mac`	varchar(64) NOT NULL,
@@ -45,6 +54,15 @@ create table `water_level` (
 	`client_mac`	varchar(64) NOT NULL,
 	`sensor_pin`  int(4) not null,
 	`water_level`	varchar(8),
+       	`capture_time` timestamp NOT NULL DEFAULT (datetime('now','localtime')),
+	`pool_id` int(4)
+);
+
+create table `elec` (
+	`id` integer primary key autoincrement,
+	`client_mac`	varchar(64) NOT NULL,
+	`sensor_pin`  int(4) not null,
+	`elec`	varchar(8),
        	`capture_time` timestamp NOT NULL DEFAULT (datetime('now','localtime')),
 	`pool_id` int(4)
 );
