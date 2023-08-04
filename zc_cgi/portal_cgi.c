@@ -9,7 +9,7 @@
 #include    "uci_fn.h"
 #include <fcgi_stdio.h>
 #include <sqlite3.h>
-#include <timer.h>
+#include "timer.h"
 sqlite3 *pdb = NULL;
 v_list_t head;
 int pipefd[2];
@@ -27,7 +27,7 @@ int cgi_init()
 
 int check_air_pressure_handle(void *para)
 {
-	CGI_LOG(LOG_ERR, "timer_handle");
+	//CGI_LOG(LOG_ERR, "timer_handle\n");
 	return 0;
 }
 
@@ -56,7 +56,7 @@ void *my_thread_thread_cb(void *arg)
 	        }
 	      }
 	    }
-		
+	    timer_handler();
 	}
 
 }
@@ -84,9 +84,9 @@ int main()
 		memset(board, 0, sizeof(board));
 		strncpy(board->mac, &board_mac[i][0], 32);
 		list_add(&board->board_list, &board_list);
-		CGI_LOG(LOG_ERR,"board_mac:%s", board->mac[i]);
+		CGI_LOG(LOG_ERR,"board_mac:%s\n", board_mac[i]);
 	}
-	pthread_create(&my_thread), NULL, my_thread_thread_cb, NULL);
+	pthread_create(&my_thread, NULL, my_thread_thread_cb, NULL);
 	while(FCGI_Accept() >= 0)
 	{
 		connection_t con;
