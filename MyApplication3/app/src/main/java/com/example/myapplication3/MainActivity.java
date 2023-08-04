@@ -28,6 +28,7 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.text.SimpleDateFormat;
 import java.util.HashMap;
 
 public class MainActivity extends AppCompatActivity {
@@ -39,6 +40,7 @@ public class MainActivity extends AppCompatActivity {
     private SharedPreferences sp;
 	private int response_success = 0;
 	private int response_error = 0;
+	private int alert_num = 0;
 	private String request_url;
     private BroadcastReceiver broadcastReceiver = new BroadcastReceiver() {
         @Override
@@ -50,6 +52,7 @@ public class MainActivity extends AppCompatActivity {
             mHandler.sendMessage(msg);
             response_success = intent.getIntExtra("response_success", response_success);
             response_error = intent.getIntExtra("response_error", response_error);
+            alert_num = intent.getIntExtra("alert_num", alert_num);
             request_url = intent.getStringExtra("url");
         }
     };
@@ -61,7 +64,7 @@ public class MainActivity extends AppCompatActivity {
             super.handleMessage(msg);
             TextView tvHttpResponse=findViewById(R.id.tvHttpResponse);
 
-            tvHttpResponse.setText(response_success+":"+response_error+" "+msg.obj.toString());
+            tvHttpResponse.setText(response_success+":"+alert_num+" "+msg.obj.toString());
             if (msg.what == 0){
                 String response_json = msg.obj.toString();
                 try {
@@ -87,6 +90,16 @@ public class MainActivity extends AppCompatActivity {
                             if (sensorData.min_value > value || sensorData.max_value < value){
                                 findViewById(sensorData.alert_id).setBackgroundColor(Color.RED);
                             }
+                            if (sensorData.timeout_minute > 0) {
+                                long start_time =  new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(item.getString("capture_time")).getTime()/1000;
+                                long end_time = System.currentTimeMillis() / 1000;
+                                //Toast.makeText(MainActivity.this, "start:"+start_time+"end:"+end_time, Toast.LENGTH_SHORT).show();
+                                if (end_time-start_time > sensorData.timeout_minute*60) {
+                                    findViewById(sensorData.alert_id).setBackgroundColor(Color.RED);
+                                    TextView tv2=findViewById(sensorData.show_time_id);
+                                    tv2.setText(item.getString("capture_time"));
+                                }
+                            }
                         }
 
                     }
@@ -111,8 +124,10 @@ public class MainActivity extends AppCompatActivity {
             sensorData.min_value = Integer.parseInt(sp.getString(new Integer(i*100*2+3+id_offset).toString(), "0"));
             sensorData.max_value = Integer.parseInt(sp.getString(new Integer(i*100*2+4+id_offset).toString(), "0"));
             sensorData.enable = sp.getString(new Integer((i*2+1)*100+3+id_offset).toString(), "disable");
+            sensorData.timeout_minute = Integer.parseInt(sp.getString(new Integer(i*100*2+5+id_offset).toString(), "0"));
             sensorData.alert_id = (i*2+1)*100+1+id_offset;
             sensorData.show_value_id = (i*2+1)*100+4+id_offset;
+            sensorData.show_time_id = (i*2+1)*100+5+id_offset;
             hashMap.put(sensorData.client_mac+sensorData.sensor_pin, sensorData);
         }
         Intent intent = new Intent("com.example.zc.broadcast");
@@ -121,6 +136,7 @@ public class MainActivity extends AppCompatActivity {
         Bundle bundle = new Bundle();
         bundle.putSerializable("map", serialHashMap);
         intent.putExtras(bundle);
+        intent.putExtra("msg_type", 1);
         sendBroadcast(intent);
     }
     public GridLayout.LayoutParams getGridSpec(int row, int col){
@@ -187,6 +203,11 @@ public class MainActivity extends AppCompatActivity {
         tv.setId(row*100+4+id_offset);
         tv.setLayoutParams(getGridSpec(row, 4));
         gridLayout.addView(tv);
+        TextView tv2 = new TextView(this);
+        tv2.setText("0");
+        tv2.setId(row*100+5+id_offset);
+        tv2.setLayoutParams(getGridSpec(row, 5));
+        gridLayout.addView(tv2);
     }
 
     @SuppressLint("ResourceType")
@@ -221,13 +242,13 @@ public class MainActivity extends AppCompatActivity {
         resetButton.setLayoutParams(getGridSpec(row, 2));
         gridLayout.addView(resetButton);
         Button enableButton = new Button(this);
-        enableButton.setText(sp.getString("9003", "disable"));
+        enableButton.setText(sp.getString("9003", "enable"));
         enableButton.setId(9003);
         enableButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 //提交数据
-                enableData(v);
+                enableThread(v);
             }
         });
         enableButton.setLayoutParams(getGridSpec(row, 3));
@@ -240,7 +261,7 @@ public class MainActivity extends AppCompatActivity {
         sp = getPreferences(MODE_PRIVATE);
         gridLayout = findViewById(R.id.gridlayout);
         for(int i=0; i< dataNum; i++) {
-            for(int j=0;j < 5; j++) {
+            for(int j=0;j < 6; j++) {
                 //存储的key就是view的id
                 String text = sp.getString(new Integer(i*100*2+j+id_offset).toString(), "0");
                 createTextView(i*2*100+j+id_offset, text, i*2, j);
@@ -305,7 +326,7 @@ public class MainActivity extends AppCompatActivity {
         int baseId = (int) (((view.getId()-id_offset)*0.01-1)*100);
         SharedPreferences.Editor editor = sp.edit();
         TextView txtData;
-        for (int j=0;j<5;j++){
+        for (int j=0;j<6;j++){
             txtData = findViewById(baseId+j+id_offset);
             editor.putString(new Integer(baseId+j+id_offset).toString(), txtData.getText().toString());
         }
@@ -316,6 +337,9 @@ public class MainActivity extends AppCompatActivity {
     public void resetData(View view) {
         @SuppressLint("ResourceType") int alert_id = view.getId() - 1;
         findViewById(alert_id).setBackgroundColor(Color.GREEN);
+        Intent intent = new Intent("com.example.zc.broadcast");
+        intent.putExtra("msg_type", 2); //2是reset消息
+        sendBroadcast(intent);
     }
 	public void showURL(View view) {
         AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
@@ -333,5 +357,21 @@ public class MainActivity extends AppCompatActivity {
         editor.commit();
         freshMap();
         Toast.makeText(this, "save success "+new Integer(button.getId()).toString()+button.getText().toString(), Toast.LENGTH_SHORT).show();
+    }
+
+    public void enableThread(View view) {
+        Button button = (Button) view;
+        Intent intent = new Intent("com.example.zc.broadcast");
+        if(button.getText().toString().equals("disable")) {
+            button.setText("enable");
+            intent.putExtra("msg_type", 4); //4是开启线程
+        }
+        else if(button.getText().toString().equals("enable")) {
+            button.setText("disable");
+            intent.putExtra("msg_type", 3); //3是暂停线程
+        }
+
+        sendBroadcast(intent);
+        Toast.makeText(this, " success ", Toast.LENGTH_SHORT).show();
     }
 }

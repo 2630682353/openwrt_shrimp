@@ -264,10 +264,13 @@ int sensor_motor_func(void *param)
 int sensor_heart_beat(void *param)
 {
 	String url = "/portal_cgi?opt=heart_beat&client_mac="+dev_mac;
+  int ret = 0;
 	DynamicJsonDocument json_obj(1024);
 	String out;
-	http_send(url, out);
-  deserializeJson(json_obj, out);
+	if (http_send(url, out) < 0)
+      return -1;
+  if (deserializeJson(json_obj, out))
+      return -1;
   if (json_obj["cmd"] == 1)
   {
       Serial.println("cmd = 1, need refresh");
@@ -320,11 +323,13 @@ int http_send(String url, String &out)
   // Use WiFiClient class to create TCP connections
   WiFiClient client;
   const int httpPort = 80;
-  
-  if (!client.connect(host, httpPort)) {
+  http_connect_times = 5;
+  while (!client.connect(host, httpPort)) {
       http_connect_times--;
+      vTaskDelay(1000);
       Serial.println("connection failed");
-      return -1;
+      if (http_connect_times < 0)
+        return -1;
       
   }
 
@@ -337,7 +342,7 @@ int http_send(String url, String &out)
               "Connection: close\r\n\r\n");
   unsigned long timeout = millis();
   while (client.available() == 0) {
-      vTaskDelay(500);
+       
       if (millis() - timeout > 5000) {
           Serial.println(">>> Client Timeout !");
           client.stop();
@@ -383,10 +388,12 @@ int fresh_sensor_info()
 	String url = "/portal_cgi?opt=query_sensor_by_mac&client_mac="+dev_mac;
     String out = "";
 
-	http_send(url, out);
 	String json_str;
 	DynamicJsonDocument json_obj(4096);
-	deserializeJson(json_obj, out);
+	if (http_send(url, out) < 0)
+      return -1;
+  if (deserializeJson(json_obj, out))
+      return -1;
 
 	util_timer *t = NULL;
 	for (int i = 0; i < json_obj["data"].size(); i++)
@@ -480,13 +487,19 @@ int wifi_connect()
 void main_task( void * parameter )
 {
   vTaskDelay(10);
+  int ret = 0;
 	msg_queue = xQueueCreate(10, sizeof(msg_item_t));
 	while(wifi_connect() != 0)
 	{
 	}
 	configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
   	printLocalTime();
-  	fresh_sensor_info();
+
+  ret = fresh_sensor_info();
+  while(ret != 0) {
+    vTaskDelay(10000);
+    ret = fresh_sensor_info();
+  }
 	util_timer *t = (util_timer *)malloc(sizeof(util_timer));
 	t->timer_type = SENSOR_HEART_BEAT;
 	t->cb_func = get_timer_func(t->timer_type);
@@ -506,7 +519,7 @@ void main_task( void * parameter )
 	list_add(&t2->list, &my_timer_list);
 
   int cmds[100];
-  int ret = 0;
+  
 	while (1)
 	{
       

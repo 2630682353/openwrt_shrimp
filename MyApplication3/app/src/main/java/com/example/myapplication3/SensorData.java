@@ -11,4 +11,6 @@ public class SensorData implements Serializable {
     public String enable;
     public int alert_id;
     public int show_value_id;
+    public int show_time_id;
+    public int timeout_minute;
 }

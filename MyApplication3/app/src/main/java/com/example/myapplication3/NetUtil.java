@@ -18,6 +18,7 @@ public class NetUtil {
         httpURLConnection = (HttpURLConnection) request_url.openConnection();
         httpURLConnection.setRequestMethod("GET");
         httpURLConnection.setConnectTimeout(5000);
+        httpURLConnection.setReadTimeout(5000);
         httpURLConnection.connect();
         //获取二进制流
         InputStream inputStream = httpURLConnection.getInputStream();

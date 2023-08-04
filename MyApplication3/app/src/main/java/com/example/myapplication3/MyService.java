@@ -26,6 +26,7 @@ import androidx.core.app.NotificationCompat;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.text.SimpleDateFormat;
 import java.util.HashMap;
 
 public class MyService extends Service {
@@ -34,10 +35,22 @@ public class MyService extends Service {
     private BroadcastReceiver broadcastReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            Bundle bundle = intent.getExtras();
-            SerialHashMap serializableHashMap = (SerialHashMap) bundle.get("map");
-            hashMap = serializableHashMap.getMap();
-            Log.d("zc", "onReceive: ");
+            int msg_type = intent.getIntExtra("msg_type", 0);
+            if (msg_type == 1) {
+                Bundle bundle = intent.getExtras();
+                SerialHashMap serializableHashMap = (SerialHashMap) bundle.get("map");
+                hashMap = serializableHashMap.getMap();
+                Log.d("zc", "onReceive: ");
+            }
+            else if(msg_type == 2) {
+                response_success = 0;
+                response_error = 0;
+                alert_num = 0;
+            }else if(msg_type == 3) {
+                request_enable = 0;
+            }else if(msg_type == 4) {
+                request_enable = 1;
+            }
         }
     };
 
@@ -48,6 +61,9 @@ public class MyService extends Service {
     private int response_success = 0;
     private int response_error = 0;
     private int alert_num = 0;
+    private int temp_alert_num = 0;
+    private int request_enable = 1;
+    private Thread thread;
     private String request_url;
     private Vibrator vibrator;
     private ConnectivityManager connectivityManager;
@@ -57,6 +73,7 @@ public class MyService extends Service {
         vibrator = (Vibrator)getSystemService(Context.VIBRATOR_SERVICE);
         long [] pattern = {100,400,100,400}; // 停止 开启 停止 开启
         vibrator.vibrate(pattern, -1);
+        alert_num++;
     }
     private Handler mHandler = new Handler(Looper.myLooper()){
         @Override
@@ -77,13 +94,18 @@ public class MyService extends Service {
                             if (sensorData == null) {
                                 return;
                             }
+                            if (sensorData.timeout_minute > 0) {
+                                long start_time =  new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(item.getString("capture_time")).getTime()/1000;
+                                long end_time = System.currentTimeMillis() / 1000;
+                                if (end_time-start_time > sensorData.timeout_minute*60)
+                                    do_vibrate();
+                            }
                             if (item.has("temper")) {
                                 value = Float.parseFloat(item.getString("temper"));
                             }else if(item.has("air_pressure")) {
                                 value = Float.parseFloat(item.getString("air_pressure"));
                             }
                             if (sensorData.min_value > value || sensorData.max_value < value){
-                                alert_num++;
                                 do_vibrate();
                             }
                         }
@@ -107,6 +129,7 @@ public class MyService extends Service {
             intent.putExtra("type", msg.what);
             intent.putExtra("response_success", response_success);
             intent.putExtra("response_error", response_error);
+            intent.putExtra("alert_num", alert_num);
 
             intent.putExtra("data", msg.obj.toString());
             intent.putExtra("url", request_url);
@@ -138,12 +161,14 @@ public class MyService extends Service {
         startForeground(1, notification);
         registerReceiver(broadcastReceiver, new IntentFilter("com.example.zc.broadcast"));
 
-        Thread thread = new Thread(new Runnable() {
+        thread = new Thread(new Runnable() {
             @Override
             public void run() {
                 while (true) {
                     try {
                         Thread.sleep(10000);
+                        if (request_enable == 0)
+                            continue;
                         JSONArray table_array = new JSONArray();
                         for (SensorData value : hashMap.values()) {
                             if (value.enable.equals("enable")) {
@@ -157,7 +182,7 @@ public class MyService extends Service {
                         String url = "";
                         JSONObject jsonRoot = new JSONObject();
                         jsonRoot.put("table_array", table_array);
-                        url = "http://192.168.10.105/portal_cgi?opt=query_last_data&table_list=" + jsonRoot.toString();
+                        url = "http://124.222.150.248:32842/portal_cgi?opt=query_last_data&table_list=" + jsonRoot.toString();
                         request_url = url;
                         Log.d("zc", "thread: "+jsonRoot.toString());
                         String response = NetUtil.doGet(url);
@@ -167,6 +192,7 @@ public class MyService extends Service {
                         msg.obj = response;
                         mHandler.sendMessage(msg);
                         response_success++;
+                        temp_alert_num = 0;
 
                     } catch (Exception e) {
                         e.printStackTrace();
@@ -179,7 +205,9 @@ public class MyService extends Service {
                             msg.obj = "network is disabled";
                         }else {
                             if (connectivityManager.getActiveNetworkInfo().isAvailable()) {
-                                do_vibrate();
+                                temp_alert_num++;
+                                if (temp_alert_num > 2)
+                                    do_vibrate();
                                 msg.obj = "network is available but connect error";
                             } else {
                                 msg.obj = "network is unavailable";
