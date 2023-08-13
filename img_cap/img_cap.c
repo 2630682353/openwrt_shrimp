@@ -1,11 +1,36 @@
-#include "timer.h"
+//#include "timer.h"
+#include <stdint.h>
+
+#include <stdlib.h>
+
+#include <stdio.h>
+
+#include <string.h>
+
+#include <errno.h>
+
+#include <fcntl.h>
+
+#include <sys/ioctl.h>
+
+#include <sys/mman.h>
+
+#include <asm/types.h>
+
+#include <linux/videodev2.h>
+
+#include <sys/time.h>
+
+#include <sys/types.h>
+
+#include <unistd.h>
 int pipefd[2];
 int img_cap_handle(void *para)
 {
 	//CGI_LOG(LOG_ERR, "timer_handle\n");
 		//定义一个设备描述符
     int fd;
-    fd = open("/dev/videoX", O_RDWR);
+    fd = open("/dev/video0", O_RDWR);
     if(fd < 0){
         perror("video设备打开失败\n");
         return -1;
@@ -40,8 +65,8 @@ int img_cap_handle(void *para)
 	//设置采集格式
 	struct v4l2_format vfmt;
     vfmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    vfmt.fmt.pix.width = 640;
-    vfmt.fmt.pix.height = 480;
+    vfmt.fmt.pix.width = 1920;
+    vfmt.fmt.pix.height = 1080;
     vfmt.fmt.pix.pixelformat = V4L2_PIX_FMT_MJPEG;
     if(ioctl(fd,VIDIOC_S_FMT,&vfmt) < 0){
         perror("设置格式失败\n");
@@ -52,7 +77,7 @@ int img_cap_handle(void *para)
         perror("获取设置格式失败\n");
         return -1;
     }
-    else if(vfmt.fmt.pix.width == 640 && vfmt.fmt.pix.height == 480 && vfmt.fmt.pix.pixelformat == V4L2_PIX_FMT_MJPEG){
+    else if(vfmt.fmt.pix.width == 1920 && vfmt.fmt.pix.height == 1080 && vfmt.fmt.pix.pixelformat == V4L2_PIX_FMT_MJPEG){
         printf("设置格式生效,实际分辨率大小<%d * %d>,图像格式:Motion-JPEG\n",vfmt.fmt.pix.width,vfmt.fmt.pix.height);
     }
     else{
@@ -133,6 +158,7 @@ int img_cap_handle(void *para)
 	return 0;
 }
 int main() {
+    /*
 	socketpair(PF_UNIX, SOCK_STREAM, 0, pipefd);
 	int ret = 0;
 	struct  timeval  timeout = {10,0};
@@ -153,4 +179,7 @@ int main() {
 	    }
 	    timer_handler();
 	}
+    */
+    img_cap_handle(NULL);
+
 }

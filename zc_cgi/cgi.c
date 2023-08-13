@@ -19,6 +19,7 @@
 extern sqlite3 *pdb;
 extern v_list_t head;
 extern struct list_head board_list;
+extern int upload_file(void);
 char *errmsg = NULL;
 
 enum {
@@ -1406,6 +1407,7 @@ error_out:
 int cgi_sys_img_save_handler(connection_t *con)
 {	
 
+	//curl -F "file=@v4l2_cap2.jpg;type=application/octet-stream" "http://192.168.10.105/portal_cgi?opt=img_save&camera_id=1"
 	char *camera_id = con_value_get(con, "camera_id");
 
 	char sql[256] = {0};
@@ -1415,7 +1417,12 @@ int cgi_sys_img_save_handler(connection_t *con)
 		cJSON_AddStringToObject(con->response, "msg", "no pool_id");
 		goto out;
 	}
-	int ImageMagick; 
+	//int ImageMagick; 
+	if (upload_file()) {
+		cJSON_AddNumberToObject(con->response, "code", 1);
+		cJSON_AddStringToObject(con->response, "msg", "upload_file fail");
+		goto out;
+	}
 
 	cJSON_AddNumberToObject(con->response, "code", 0);
 //	cJSON_AddItemToObject(con->response, "data", board_array);
