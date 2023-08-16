@@ -16,6 +16,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.util.Log;
+import android.view.KeyEvent;
 import android.view.View;
 import android.widget.AutoCompleteTextView;
 import android.widget.Button;
@@ -42,6 +43,23 @@ public class MainActivity extends AppCompatActivity {
 	private int response_error = 0;
 	private int alert_num = 0;
 	private String request_url;
+	private String alert_string;
+
+    @Override
+    public void finish() {
+        moveTaskToBack(true);
+    }
+
+    //按返回鍵的時候不但願退出（默認就finish了），而是隻但願置後臺，就能夠調這個方法
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if(keyCode == KeyEvent.KEYCODE_BACK){
+            moveTaskToBack(true);
+            return true;
+        }
+        return super.onKeyDown(keyCode, event);
+    }
+
     private BroadcastReceiver broadcastReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -51,6 +69,7 @@ public class MainActivity extends AppCompatActivity {
 
             mHandler.sendMessage(msg);
             response_success = intent.getIntExtra("response_success", response_success);
+            alert_string = intent.getStringExtra("alert_string");
             response_error = intent.getIntExtra("response_error", response_error);
             alert_num = intent.getIntExtra("alert_num", alert_num);
             request_url = intent.getStringExtra("url");
@@ -253,6 +272,18 @@ public class MainActivity extends AppCompatActivity {
         });
         enableButton.setLayoutParams(getGridSpec(row, 3));
         gridLayout.addView(enableButton);
+        Button showAlertButton = new Button(this);
+        showAlertButton.setText("查看");
+        showAlertButton.setId(9004);
+        showAlertButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                //提交数据
+                showAlert(v);
+            }
+        });
+        showAlertButton.setLayoutParams(getGridSpec(row, 4));
+        gridLayout.addView(showAlertButton);
     }
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -272,50 +303,7 @@ public class MainActivity extends AppCompatActivity {
         createMainButton(10);
         Intent intent = new Intent(this, MyService.class);
         startService(intent);
-/*
-        Thread thread = new Thread(new Runnable() {
-            @Override
-            public void run() {
-                while (true) {
-                    try {
-                        Thread.sleep(5000);
-                        JSONArray table_array = new JSONArray();
-                        for (SensorData value : hashMap.values()) {
-                            if (value.enable.equals("enable")) {
-                                JSONObject jsonObject = new JSONObject();
-                                jsonObject.put("client_mac", value.client_mac);
-                                jsonObject.put("sensor_pin", value.sensor_pin);
-                                jsonObject.put("table", value.table);
-                                table_array.put(jsonObject);
-                            }
-                        }
-                        String url = "";
-                        JSONObject jsonRoot = new JSONObject();
-                        jsonRoot.put("table_array", table_array);
-                        url = "http://192.168.10.105/portal_cgi?opt=query_last_data&table_list=" + jsonRoot.toString();
 
-                        String response = NetUtil.doGet(url);
-						request_url = url;
-                        Message msg = new Message();
-                        msg.what = 0;
-                        msg.obj = response;
-                        mHandler.sendMessage(msg);
-						response_success++;
-
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                        String test = "get data error";
-                        Message msg = new Message();
-                        msg.what = 1;
-                        msg.obj = test;
-                        mHandler.sendMessage(msg);
-						response_error++;
-                    }
-                }
-            }
-        });
-       thread.start();
- */
         new Handler().postDelayed(new Runnable() {
             public void run() {
                 freshMap();
@@ -329,6 +317,7 @@ public class MainActivity extends AppCompatActivity {
         for (int j=0;j<6;j++){
             txtData = findViewById(baseId+j+id_offset);
             editor.putString(new Integer(baseId+j+id_offset).toString(), txtData.getText().toString());
+
         }
         editor.commit();
         freshMap();
@@ -336,14 +325,20 @@ public class MainActivity extends AppCompatActivity {
     }
     public void resetData(View view) {
         @SuppressLint("ResourceType") int alert_id = view.getId() - 1;
-        findViewById(alert_id).setBackgroundColor(Color.GREEN);
+        findViewById(alert_id).setBackgroundColor(Color.GRAY);
         Intent intent = new Intent("com.example.zc.broadcast");
         intent.putExtra("msg_type", 2); //2是reset消息
         sendBroadcast(intent);
+        alert_string = "";
     }
 	public void showURL(View view) {
         AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
         builder.setMessage(request_url);
+        builder.show();
+    }
+    public void showAlert(View view) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
+        builder.setMessage(alert_string);
         builder.show();
     }
     public void enableData(View view) {

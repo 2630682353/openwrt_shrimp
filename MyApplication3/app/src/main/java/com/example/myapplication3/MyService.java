@@ -3,6 +3,7 @@ package com.example.myapplication3;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.app.Service;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -26,7 +27,12 @@ import androidx.core.app.NotificationCompat;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.HashMap;
 
 public class MyService extends Service {
@@ -46,6 +52,7 @@ public class MyService extends Service {
                 response_success = 0;
                 response_error = 0;
                 alert_num = 0;
+                alert_string="";
             }else if(msg_type == 3) {
                 request_enable = 0;
             }else if(msg_type == 4) {
@@ -63,6 +70,7 @@ public class MyService extends Service {
     private int alert_num = 0;
     private int temp_alert_num = 0;
     private int request_enable = 1;
+    private String alert_string;
     private Thread thread;
     private String request_url;
     private Vibrator vibrator;
@@ -71,9 +79,26 @@ public class MyService extends Service {
     public void do_vibrate()
     {
         vibrator = (Vibrator)getSystemService(Context.VIBRATOR_SERVICE);
-        long [] pattern = {100,400,100,400}; // 停止 开启 停止 开启
+        long [] pattern = {100,1000,100,1000}; // 停止 开启 停止 开启
         vibrator.vibrate(pattern, -1);
         alert_num++;
+    }
+
+    public boolean do_ping()
+    {
+        try {
+            Process p = Runtime.getRuntime().exec("ping -c 2 -w 1 223.5.5.5");
+            // PING的状态
+            int status = p.waitFor();
+            if (status == 0) {
+                return  true;
+            } else {
+                return false;
+            }
+        } catch (Exception e) {
+            return false;
+        }
+
     }
     private Handler mHandler = new Handler(Looper.myLooper()){
         @Override
@@ -97,8 +122,10 @@ public class MyService extends Service {
                             if (sensorData.timeout_minute > 0) {
                                 long start_time =  new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(item.getString("capture_time")).getTime()/1000;
                                 long end_time = System.currentTimeMillis() / 1000;
-                                if (end_time-start_time > sensorData.timeout_minute*60)
+                                if (end_time-start_time > sensorData.timeout_minute*60) {
                                     do_vibrate();
+                                    alert_string = msg.obj.toString()+new Date().toString();
+                                }
                             }
                             if (item.has("temper")) {
                                 value = Float.parseFloat(item.getString("temper"));
@@ -107,6 +134,7 @@ public class MyService extends Service {
                             }
                             if (sensorData.min_value > value || sensorData.max_value < value){
                                 do_vibrate();
+                                alert_string = msg.obj.toString()+new Date().toString();
                             }
                         }
 
@@ -114,11 +142,13 @@ public class MyService extends Service {
                     else{
                         response_error++;
                         do_vibrate();
+                        alert_string = msg.obj.toString()+new Date().toString();
                     }
                 } catch (Exception e) {
                     e.printStackTrace();
                     response_error++;
                     do_vibrate();
+                    alert_string = msg.obj.toString()+new Date().toString();
                 }
             }
             String show_text = "success:"+response_success+" error:"+response_error+" alert:"+alert_num;
@@ -133,6 +163,7 @@ public class MyService extends Service {
 
             intent.putExtra("data", msg.obj.toString());
             intent.putExtra("url", request_url);
+            intent.putExtra("alert_string", alert_string);
             sendBroadcast(intent);
         }
     };
@@ -153,10 +184,14 @@ public class MyService extends Service {
             channel = new NotificationChannel("channel_id", "通知", NotificationManager.IMPORTANCE_DEFAULT);
             notificationManager.createNotificationChannel(channel);
         }
+        Intent intent = new Intent(this, MainActivity.class);
+
+        PendingIntent intentPend = PendingIntent.getActivity(this, 0, intent,PendingIntent.FLAG_CANCEL_CURRENT);
         builder = new NotificationCompat.Builder(this, "channel_id");
         notification = builder.setSmallIcon(R.drawable.ic_launcher_background)
                 .setContentTitle("这是通知标题")
                 .setContentText("这是通知内容")
+                .setContentIntent(intentPend)
                 .build();
         startForeground(1, notification);
         registerReceiver(broadcastReceiver, new IntentFilter("com.example.zc.broadcast"));
@@ -204,11 +239,14 @@ public class MyService extends Service {
                         {
                             msg.obj = "network is disabled";
                         }else {
-                            if (connectivityManager.getActiveNetworkInfo().isAvailable()) {
+                            if (connectivityManager.getActiveNetworkInfo().isAvailable() && do_ping()) {
                                 temp_alert_num++;
-                                if (temp_alert_num > 2)
-                                    do_vibrate();
                                 msg.obj = "network is available but connect error";
+                                if (temp_alert_num > 2) {
+                                    do_vibrate();
+                                    alert_string = msg.obj.toString()+new Date().toString();
+                                }
+
                             } else {
                                 msg.obj = "network is unavailable";
                             }
