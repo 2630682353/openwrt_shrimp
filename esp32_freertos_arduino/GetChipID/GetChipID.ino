@@ -591,8 +591,12 @@ int http_send(String url, String &out)
       http_connect_times--;
       vTaskDelay(1000);
       Serial.println("connection failed");
-      if (http_connect_times < 0)
-        return -1;
+      if (http_connect_times < 0) {
+		if (WiFi.status() != WL_CONNECTED)
+			ESP.restart();
+	return -1;		
+	}
+        
       
   }
 

@@ -24,7 +24,7 @@ create table `sensor_info`(
 	`pool_id`  int(4),
 	`add_time` 	timestamp NOT NULL DEFAULT (datetime('now','localtime')),
 	`report_interval`	int(8),
-	`other_param`	varchar(64) default '0',
+	`other_param`	varchar(128) default '0',
 	`description`	varchar(64) default '0'
 );
 
@@ -36,7 +36,7 @@ create table `sensor_info_real`(
 	`pool_id`  int(4),
 	`add_time` 	timestamp NOT NULL DEFAULT (datetime('now','localtime')),
 	`report_interval`	int(8),
-	`other_param`	varchar(64) default '0',
+	`other_param`	varchar(128) default '0',
 	`description`	varchar(64) default '0'
 );
 
