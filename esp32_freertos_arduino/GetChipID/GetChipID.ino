@@ -478,7 +478,7 @@ int sensor_feed_func(void *param)
   float after_weight;
   Serial.println("in motor func");
   printLocalTime();
-  /*
+  
   if (scale.is_ready()) {
     before_weight = scale.get_units(10);
   } else {
@@ -486,7 +486,9 @@ int sensor_feed_func(void *param)
 	return -1;
   }
   after_weight = before_weight;
-  //motor_start;
+  //motor_start
+  pinMode(p->pin, OUTPUT);
+  digitalWrite(p->pin, HIGH);
   while(before_weight - after_weight < p->feed_weight)
   {
     if (scale.is_ready()) {
@@ -498,8 +500,10 @@ int sensor_feed_func(void *param)
       Serial.println("HX711 not found.");
       break;
     }
-  }*/
+  }
   //motor_end;
+  pinMode(p->pin, OUTPUT);
+  digitalWrite(p->pin, LOW);
   return 0;
   
 }
