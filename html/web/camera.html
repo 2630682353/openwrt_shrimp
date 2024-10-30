@@ -1,0 +1,73 @@
+<style>
+table {padding: 0px;font-size: 14px;margin: 0px;}
+
+</style>
+<script type="text/javascript">
+//$(document).ready(function(){
+ 
+   // 开始写 jQuery 代码...
+   // 在这里面就是等待文档dom加载完成执行相关代码
+ 
+//});
+</script>
+
+<div id="table-container"></div>
+<div id="camera_stream"></div>
+
+<script type="text/javascript" src="jquery-3.7.0.min.js"></script>
+<script type="text/javascript">
+
+  var json_array;
+
+  function get_stream()
+  {
+      var domain = window.location.hostname; 
+      if (domain == "124.222.150.248")
+      	$('#camera_stream').html("<iframe id='iframe' src='http://"+domain+":32844' width='800px' height='800px'></iframe>");
+      else{
+      	$('#camera_stream').html("<iframe id='iframe' src='http://"+domain+":8090' width='800px' height='800px'></iframe>");
+      }
+  }
+  function enable_stream(n)
+  {
+  	var url = '/portal_cgi?opt=update_camera_list&client_mac='+json_array[n].client_mac+'&enable_stream=1&stream_id=0&report_interval=300';
+    
+     $.getJSON(url,function(data){
+        if (data.code == 0)
+        {
+          setTimeout(get_stream,13000);
+        }
+      });
+  }
+
+  function disable_stream(n)
+  {
+    var url = '/portal_cgi?opt=update_camera_list&client_mac='+json_array[n].client_mac+'&enable_stream=0&stream_id=0&report_interval=300';
+    
+     $.getJSON(url,function(data){
+        if (data.code == 0)
+        {
+        }
+      });
+  }
+  
+  var table = '<table border="1"><tbody>';
+	$.getJSON('/portal_cgi?opt=get_camera_list&date='+Date.now(),function(data){
+	      json_array = data.data;
+	      //alert(JSON.stringify(data));
+	      show_table();
+	  });
+
+  function show_table() {
+
+  	$.each(json_array, function(n, item){
+       table += '<tr><td>' + item.client_mac + '</td><td>camera_num:' + item.camera_num + '</td><td>enable_stream:' + item.enable_stream + '</td><td>stream_id:' + item.stream_id + '</td><td><input type=\'button\' value=\'开启流\' onclick=\'enable_stream('+n+')\'/></td><td><input type=\'button\' value=\'关闭流\' onclick=\'disable_stream('+n+')\'/></td></tr>';
+     });
+  	    
+  	// 结束表格
+  	table += '</tbody></table>';
+  	// 在页面中显示表格
+  	$('#table-container').html(table);
+	}
+</script>
+

@@ -67,6 +67,16 @@ create table `elec` (
 	`pool_id` int(4)
 );
 
+create table `air_temper_humidity` (
+	`id` integer primary key autoincrement,
+	`client_mac`	varchar(64) NOT NULL,
+	`sensor_pin`  int(4) not null,
+	`temper`	varchar(8),
+	`humidity`	varchar(8),
+       	`capture_time` timestamp NOT NULL DEFAULT (datetime('now','localtime')),
+	`pool_id` int(4)
+);
+
 create table `feed` (
 	`id` integer primary key autoincrement,
 	`client_mac`	varchar(64) NOT NULL,
@@ -81,7 +91,7 @@ create table `pool` (
 	`area`	varchar(8),
 	`deep`  	varchar(8),
 	`shrimp_num`	integer DEFAULT 0,
-       	`start_feed_time` timestamp,
+       	`start_feed_time` timestamp NOT NULL DEFAULT (datetime('now','localtime'))
 );
 
 create unique index sensor_index on sensor_info(client_mac, sensor_pin);

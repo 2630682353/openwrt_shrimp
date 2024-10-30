@@ -1,0 +1,156 @@
+<style>
+table {padding: 0px;font-size: 14px;margin: 0px;}
+
+</style>
+<script type="text/javascript">
+//$(document).ready(function(){
+ 
+   // 开始写 jQuery 代码...
+   // 在这里面就是等待文档dom加载完成执行相关代码
+ 
+//});
+</script>
+<div>type 1:温度,2:气压,3:重量,4:高度,5:电流,6:气温和湿度      100:喂食定时  150:加热 180:开关</div><br/>
+    引脚 4:水温,12:喂食开关，14:气温湿度 15:加热开关，16、17:重量，100:心跳, 201:上报传感器, 202:加热<br/>
+    其他参数  定时喂食:称重引脚|喂食重量|定时时间      加热:低温,高温,加热开关mac,加热开关引脚</div><br/>
+
+<div id="table-container" style="float: left;"><table border="1">
+  <tr>
+    <th>Month</th>
+    <th>Savings</th>
+  </tr>
+  <tr>
+    <td>January</td>
+    <td>$100</td>
+  </tr>
+</table>
+
+</div>
+<div id="table-container2" style="float: left;"><table border="1">
+  <tr>
+    <th>Month</th>
+    <th>Savings</th>
+  </tr>
+  <tr>
+    <td>January</td>
+    <td>$100</td>
+  </tr>
+</table>
+
+</div>
+<div id="edit-container" width='600px' style="clear:left;"></div>
+<div style="clear:left;"><input type="button" onclick='add_sensor()' value='添加'></div>
+<div id="send-message-container" width='600px' style="clear:left;">
+dst_mac:<input id='dst_mac' type='text'>message_type:<input type='text' id='message_type'><input type='button' value='发送' onclick='send_message()'>
+heat_on/heat_off
+</div>
+
+<script type="text/javascript" src="jquery-3.7.0.min.js"></script>
+<script type="text/javascript">
+  var json_str="{\"data\":[{\"name\":\"zc\",\"age\":10},{\"name\":\"zc2\",\"age\":10}]}";
+  var obj = JSON.parse(json_str);
+  var json_array;
+  var json_array2;
+  function send_message()
+  {
+    var url = '/portal_cgi?opt=board_message&client_mac=00:00:00:00:00:00&dst_mac='+$('#dst_mac').val()+'&message_type='+$('#message_type').val()+'&date='+Date.now();
+    
+     $.getJSON(url,function(data){
+        if (data.code != 0)
+        {
+          alert("发送失败");
+        }
+      });
+  }
+  function edit_send(n)
+  {
+  	if (n==1)
+  	{
+  		var url = '/portal_cgi?opt=update_sensor&client_mac='+$('#client_mac').val()+'&id='+$('#sensor_id').val()+'&sensor_type='+$('#sensor_type').val()+'&pool_id='+$('#pool_id').val()+'&report_interval='+$('#report_interval').val()+'&other_param='+$('#other_param').val()+'&date='+Date.now();
+  	}else if(n==2)
+  	{
+  		var url = '/portal_cgi?opt=add_sensor&client_mac='+$('#client_mac').val()+'&sensor_pin='+$('#sensor_pin').val()+'&sensor_type='+$('#sensor_type').val()+'&pool_id='+$('#pool_id').val()+'&report_interval='+$('#report_interval').val()+'&other_param='+$('#other_param').val()+'&date='+Date.now();
+  	}else if(n==3)
+  	{
+  		var url = '/portal_cgi?opt=delete_sensor&id='+$('#sensor_id').val()+'&client_mac='+$('#client_mac').val()+'&date='+Date.now();
+  	}
+  	
+  	 $.getJSON(url,function(data){
+        if (data.code == 0)
+        {
+        	location.reload();
+        }
+      });
+  }
+  function edit_sensor(n)
+  {
+  	$('#edit-container').html("id:<input type='text' id='sensor_id' value='"+json_array[n].id+"' disabled=true><br>client_mac:<input type='text' id='client_mac' value='"+json_array[n].client_mac+"' disabled=true><br>sensor_pin:<input type='text' id='sensor_pin' value='"+json_array[n].sensor_pin+"' disabled=true><br>type:<input type='text' id='sensor_type' value='"+json_array[n].type+"'><br>pool_id:<input id='pool_id' type='text' value='"+json_array[n].pool_id+"'><br>report_interval:<input type='text' id='report_interval' value='"+json_array[n].report_interval+"'><br>other_param:<input type='text' id='other_param' value='"+json_array[n].other_param+"'><input type='button' value='提交' onclick='edit_send(1)'>");
+  }
+  function delete_sensor(n)
+  {
+  	$('#edit-container').html("id:<input type='hidden' id='sensor_id' value='"+json_array[n].id+"'><input type='hidden' id='client_mac' value='"+json_array[n].client_mac+"'>");
+  	edit_send(3);
+  }
+  function add_sensor()
+  {
+  	$('#edit-container').html("client_mac:<input type='text' id='client_mac'><br>sensor_pin:<input type='text' id='sensor_pin'><br>type:<input type='text' id='sensor_type' ><br>pool_id:<input id='pool_id' type='text'><br>report_interval:<input type='text' id='report_interval'><br>other_param:<input type='text' id='other_param'><input type='button' value='提交' onclick='edit_send(2)'>");
+  }
+  // 生成表格头部
+  var table = '<table border="1"><thead><tr><th>id</th><th>board_mac</th><th>引脚</th><th>种类</th><th>池</th><th>间隔</th><th>other_param</th><th>opt</th></tr></thead><tbody>';
+  var table2 = '<table border="1"><thead><tr><th>id</th><th>board_mac</th><th>引脚</th><th>种类</th><th>池</th><th>间隔</th><th>时间</th><th>other_param</th></tr></thead><tbody>';
+  var table_ok = 0;
+  var table2_ok = 0;
+  
+	$.getJSON('/portal_cgi?opt=query_sensor&date='+Date.now(),function(data){
+	      json_array = data.data;
+	      table_ok = 1;
+	      show_table();
+	  });
+
+	$.getJSON('/portal_cgi?opt=query_sensor_real&date='+Date.now(),function(data){
+	      json_array2 = data.data;  
+	      table2_ok = 1;
+	      show_table();
+	  });
+    function show_table() {
+    	if (table_ok == 0 || table2_ok == 0)
+    		return;
+    var timestamp_now = new Date().getTime()/1000;
+		var is_equal = 0;
+		$.each(json_array, function(n, item){
+			is_equal = 0;
+			$.each(json_array2, function(n2, item2){
+				
+				if (item2.id == item.id && item2.client_mac == item.client_mac && item2.sensor_pin == item.sensor_pin && item2.type == item.type 
+					&& item2.pool_id == item.pool_id && item2.report_interval == item.report_interval) {
+
+					var add_time = item2.add_time;
+					add_time = add_time.substring(0,19);    
+					add_time = add_time.replace(/-/g,'/'); 
+					var timestamp_add = new Date(add_time).getTime()/1000;
+					if (timestamp_now - timestamp_add < 60*60*2+1 )
+							is_equal = 1;
+				}
+			})
+			if (is_equal == 1)
+		         table += '<tr style="color:green"><td>' + item.id + '</td><td>' + item.client_mac + '</td><td>' + item.sensor_pin + '</td><td>' + item.type + '</td><td>' + item.pool_id + '</td><td>' + item.report_interval + '</td><td>' + item.other_param + '</td><td><input type=\'button\' value=\'修改\' onclick=\'edit_sensor('+n+')\'/><input type=\'button\' value=\'删除\' onclick=\'delete_sensor('+n+')\'/></td></tr>' ;
+		    else{
+		    	table += '<tr style="color:red"><td>' + item.id + '</td><td>' + item.client_mac + '</td><td>' + item.sensor_pin + '</td><td>' + item.type + '</td><td>' + item.pool_id + '</td><td>' + item.report_interval + '</td><td>' + item.other_param + '</td><td><input type=\'button\' value=\'修改\' onclick=\'edit_sensor('+n+')\'/><input type=\'button\' value=\'删除\' onclick=\'delete_sensor('+n+')\'/></td></tr>' ;
+		    }
+
+		    });
+		    
+		// 结束表格
+		table += '</tbody></table>';
+		// 在页面中显示表格
+		$('#table-container').html(table);
+		$.each(json_array2, function(n, item){
+		         table2 += '<tr><td>' + item.id + '</td><td>' + item.client_mac + '</td><td>' + item.sensor_pin + '</td><td>' + item.type + '</td><td>' + item.pool_id + '</td><td>' + item.report_interval + '</td><td>' + item.add_time + '</td><td>'+item.other_param+'</td></tr>' ;
+		        })
+		       // 结束表格
+		      table2 += '</tbody></table>';
+		       // 在页面中显示表格
+		      $('#table-container2').html(table2);
+	}
+</script>
+

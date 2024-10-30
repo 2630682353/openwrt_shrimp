@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>ECharts</title>
+    <!-- 引入刚刚下载的 ECharts 文件 -->
+    <script src="echarts.min.js"></script>
+    <script src="jquery-3.7.0.min.js"></script>
+    <style>
+button {margin: 10px;font-size: 14px;width: 120px; height: 40px}
+
+</style>
+  </head>
+  <body>
+    <!-- 为 ECharts 准备一个定义了宽高的 DOM -->
+    <div><button type="button">水位和气压</button><button type="button">feed重量和电流</button><button type="button">温度</button></div>
+    <div id="temp_div" style="width: 1200px;height:400px;"></div>
+    <div id="water_level_div" style="width: 1200px;height:400px;"></div>
+    <div id="elec_div" style="width: 1200px;height:400px;"></div>
+    <div id="sys"></div>
+    <script type="text/javascript">
+      function hasKey(json, key) {
+          return key in json || json.hasOwnProperty(key) || typeof(json[key]) !== "undefined";
+      }
+      // 基于准备好的dom，初始化echarts实例
+      var temperChart = echarts.init(document.getElementById('temp_div'));
+      var waterLevelChart = echarts.init(document.getElementById('water_level_div'));
+      var elecChart = echarts.init(document.getElementById('elec_div'));
+      var tempers = [
+        {time: "2021-01-04 08:18:36", temper:22.5},
+        {time: "2021-01-04 08:28:36", temper:25.5},
+        {time: "2021-01-04 08:38:36", temper:23.5},
+        {time: "2021-01-04 08:48:36", temper:22.5}]
+
+      // 使用刚指定的配置项和数据显示图表。
+      
+      // 异步加载数据
+      var temper_total_data = {};
+      var water_level_total_data = {};
+      var elec_total_data = {};
+      var temper_option = {
+        dataset: [],
+        xAxis: {
+          type: "time", 
+ //         min: "2021-01-04 00:00:00",
+ //         max: "2021-01-04 23:59:59",
+          splitNumber: 24,
+        },
+        yAxis: {
+          min: 0,
+          max: 36,
+          splitNumber: 8,
+        },
+        dataZoom: [{
+          type: 'inside',
+          start: 0,
+          end: 100
+        }],
+        legend: {
+          type: 'scroll',
+          icon: 'pin',
+          data: [],
+          left: 'right',
+          top: 30,
+        },
+        grid: {
+          left: '3%',
+          right: '5%',
+          bottom: '15%',
+          containLabel: true
+        },
+        series: []
+      };
+      temper_option["title"] = {text:"温度"};
+      var water_level_option = JSON.parse(JSON.stringify(temper_option));
+      water_level_option["title"] = {text:"高度"};
+      water_level_option["yAxis"] = {min: 5,max: 30,splitNumber: 10};
+      var elec_option = JSON.parse(JSON.stringify(temper_option));
+      elec_option["title"] = {text:"电流"};
+      elec_option["yAxis"] = {min: 80,max: 120,splitNumber: 10};
+
+      $.getJSON('/portal_cgi?opt=query_temper&client_mac=all&period=recent&sensor_pin=all',function(data){
+          var tmp = data.data;
+          $.each(tmp, function(n, value){
+            var key = value.client_mac+'_'+value.sensor_pin+'_'+value.pool_id;
+            if (!hasKey(temper_total_data, key)) {
+                temper_total_data[key] = [];
+            } 
+            temper_total_data[key].push({time:value.capture_time,temper:Number(value.temper)});
+          })
+          var index = 0;
+          for(var item in temper_total_data){
+              temper_option["dataset"].push({source:temper_total_data[item]});
+              temper_option["legend"].data.push(item);
+              temper_option["series"].push({type:'line',name:item,datasetIndex:index,
+                                    label:{show:false,position:'top',textStyle:{fontSize:20}},
+                                    emphasis: {label:{show: true}}
+                                    })
+              index++;
+          }
+          temperChart.setOption(temper_option);
+      });
+
+      $.getJSON('/portal_cgi?opt=query_water_level&client_mac=all&period=recent&sensor_pin=all',function(data){
+          var tmp = data.data;
+          $.each(tmp, function(n, value){
+            var key = value.client_mac+'_'+value.sensor_pin;
+            if (!hasKey(water_level_total_data, key)) {
+                water_level_total_data[key] = [];
+            } 
+            water_level_total_data[key].push({time:value.capture_time,water_level:Number(value.water_level)});
+          })
+          var index = 0;
+          for(var item in water_level_total_data){
+              water_level_option["dataset"].push({source:water_level_total_data[item]});
+              water_level_option["legend"].data.push(item);
+              water_level_option["series"].push({type:'line',name:item,datasetIndex:index,
+                                    label:{show:false,position:'top',textStyle:{fontSize:20}},
+                                    emphasis: {label:{show: true}}
+                                    })
+              index++;
+          }
+          waterLevelChart.setOption(water_level_option);
+      });
+
+      $.getJSON('/portal_cgi?opt=query_elec&client_mac=all&period=recent&sensor_pin=all',function(data){
+          var tmp = data.data;
+          $.each(tmp, function(n, value){
+            var key = value.client_mac+'_'+value.sensor_pin;
+            if (!hasKey(elec_total_data, key)) {
+                elec_total_data[key] = [];
+            } 
+            elec_total_data[key].push({time:value.capture_time,elec:Number(value.elec)});
+          })
+          var index = 0;
+          for(var item in elec_total_data){
+              elec_option["dataset"].push({source:elec_total_data[item]});
+              elec_option["legend"].data.push(item);
+              elec_option["series"].push({type:'line',name:item,datasetIndex:index,
+                                    label:{show:false,position:'top',textStyle:{fontSize:20}},
+                                    emphasis: {label:{show: true}}
+                                    })
+              index++;
+          }
+          elecChart.setOption(elec_option);
+      });
+//      option.dataset.push({source: zc_temper});
+//      option.dataset.push({source: zc_temper2});
+      // 指定图表的配置项和数据
+    /*
+      var option = {
+        dataset: [{
+          source: zc_temper
+        },{source: zc_temper2}],
+        xAxis: {
+          type: "time", 
+ //         min: "2021-01-04 00:00:00",
+ //         max: "2021-01-04 23:59:59",
+        },
+        yAxis: {
+          min: 10,
+          max: 34,
+          splitNumber: 8,
+        },
+        dataZoom: [{
+          type: 'inside',
+          start: 0,
+          end: 100
+        }],
+        legend: {
+          type: 'scroll',
+          icon: 'pin',
+          data: ['temper1', 'temper2'],
+          left: 'right',
+          top: 30,
+        },
+        grid: {
+          left: '3%',
+          right: '5%',
+          bottom: '15%',
+          containLabel: true
+        },
+        series: [
+          {
+            type: 'line',
+            name: 'temper1',
+            datasetIndex:0,
+            label: {
+              show: false,
+              position: 'top',
+              textStyle: {
+                fontSize: 20
+              }
+            },
+            emphasis: {
+              label:{
+                show: true
+              }
+            }
+          },
+          {
+            type: 'line',
+            datasetIndex:1,
+            name: 'temper2',
+            label: {
+              show: false,
+              position: 'top',
+              textStyle: {
+                fontSize: 20
+              }
+            },
+            emphasis: {
+              label:{
+                show: true
+              }
+            }
+          }
+        ]
+      };*/
+      
+    </script>
+  </body>
+</html>

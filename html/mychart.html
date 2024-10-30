@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>ECharts</title>
+    <!-- 引入刚刚下载的 ECharts 文件 -->
+    <script src="echarts.min.js"></script>
+    <script src="jquery.min.js"></script>
+  </head>
+  <body>
+    <!-- 为 ECharts 准备一个定义了宽高的 DOM -->
+    <div id="main" style="width: 1000px;height:400px;"></div>
+    <div id="sys"></div>
+    <script type="text/javascript">
+      // 基于准备好的dom，初始化echarts实例
+      var myChart = echarts.init(document.getElementById('main'));
+      var tempers = [
+        {time: "2021-01-04 08:18:36", temper:22.5},
+        {time: "2021-01-04 08:28:36", temper:25.5},
+        {time: "2021-01-04 08:38:36", temper:23.5},
+        {time: "2021-01-04 08:48:36", temper:22.5}]
+
+      var tempers2 = [{time: "2021-01-04 08:18:36", temper:21.5},
+        {time: "2021-01-04 08:28:36", temper:22.5},
+        {time: "2021-01-04 08:38:36", temper:23.5},
+        {time: "2021-01-04 08:48:36", temper:24.5}]
+     
+      var temper_times = [];
+      var temper_value = [];
+      $.each(tempers, function(index, item){
+          temper_times.push(item.time);
+          temper_value.push(item.temper);
+      });
+      var zc_temper = [];
+      var zc_temper2 = [];
+      
+      // 使用刚指定的配置项和数据显示图表。
+      
+      // 异步加载数据
+      
+      $.getJSON('/portal_cgi?opt=query_temper&client_mac=all&period=recent&client_temper_index=all',function(data){
+          var tmp = data.data;
+          $.each(tmp, function(n, value){
+            if (value.client_mac == '7C:87:CE:2E:AA:B0')
+              zc_temper.push({time:value.capture_time,temper:Number(value.temper)});
+            else if (value.client_mac == 'ee:ee:ee:ee:ee:ee'){
+              zc_temper2.push({time:value.capture_time,temper:Number(value.temper)});
+            }
+          })
+          console.log(zc_temper);
+          console.log(zc_temper2);
+          myChart.setOption(option);
+      });
+//      option.dataset.push({source: zc_temper});
+//      option.dataset.push({source: zc_temper2});
+      // 指定图表的配置项和数据
+      option = {
+        dataset: [{
+          source: zc_temper
+        },{source: zc_temper2}],
+        xAxis: {
+          type: "time", 
+ //         min: "2021-01-04 00:00:00",
+ //         max: "2021-01-04 23:59:59",
+        },
+        yAxis: {
+          min: 10,
+          max: 34,
+          splitNumber: 8,
+        },
+        dataZoom: [{
+          type: 'inside',
+          start: 0,
+          end: 100
+        }],
+        legend: {
+          type: 'scroll',
+          icon: 'pin',
+          data: ['temper1', 'temper2'],
+          left: 'right',
+          top: 30,
+        },
+        grid: {
+          left: '3%',
+          right: '5%',
+          bottom: '15%',
+          containLabel: true
+        },
+        series: [
+          {
+            type: 'line',
+            name: 'temper1',
+            datasetIndex:0,
+            label: {
+              show: false,
+              position: 'top',
+              textStyle: {
+                fontSize: 20
+              }
+            },
+            emphasis: {
+              label:{
+                show: true
+              }
+            }
+          },
+          {
+            type: 'line',
+            datasetIndex:1,
+            name: 'temper2',
+            label: {
+              show: false,
+              position: 'top',
+              textStyle: {
+                fontSize: 20
+              }
+            },
+            emphasis: {
+              label:{
+                show: true
+              }
+            }
+          }
+        ]
+      };
+      
+    </script>
+  </body>
+</html>
