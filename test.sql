@@ -77,13 +77,36 @@ create table `air_temper_humidity` (
 	`pool_id` int(4)
 );
 
-create table `feed` (
+
+create table `feed_weight` (
 	`id` integer primary key autoincrement,
 	`client_mac`	varchar(64) NOT NULL,
 	`sensor_pin`  int(4) not null,
 	`feed_weight`	varchar(8),
        	`capture_time` timestamp NOT NULL DEFAULT (datetime('now','localtime')),
 	`pool_id` int(4)
+);
+
+create table `feed_event` (
+	`id` integer primary key autoincrement,
+	`client_mac`	varchar(64) NOT NULL,
+	`sensor_pin`  int(4) not null,
+	`feed_weight`	varchar(8),
+       	`capture_time` timestamp NOT NULL DEFAULT (datetime('now','localtime')),
+	`pool_id` int(4)
+);
+
+create table `check_list` (
+	`id` integer primary key autoincrement,
+	`client_mac`	varchar(64) NOT NULL,
+	`sensor_pin`  int(4) not null,
+	`type` int(4),
+    `off_time` int(8),
+	`low_value` int(8),
+	`hight_value` int(8),
+	`is_alerting` int(4) default 0,
+	`alert_times` int(6) default 0,
+	`enable` int(4)
 );
 
 create table `pool` (

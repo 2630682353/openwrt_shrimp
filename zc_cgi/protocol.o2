@@ -1,0 +1,24 @@
+#ifndef _http_protocol_h_
+#define _http_protocol_h_
+#include "connection.h"
+
+#define PRO_BASE_ARG_ERR 20100000
+
+#define SENSOR_FEED_WEIGHT
+#define SENSOR_AIR_PRESSURE
+#define SENSOR_TEMPER
+#define SENSOR_ELECT
+
+#define ALERT_OUT_RANGE
+#define ALERT_OFF_TIME
+
+typedef struct _cgi_protocol_t{
+	const char *name;
+	int (*handler)(connection_t *);
+}cgi_protocol_t;
+
+extern cgi_protocol_t *find_pro_handler(const char *pro_opt);
+
+
+
+#endif

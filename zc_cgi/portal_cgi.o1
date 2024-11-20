@@ -1,0 +1,185 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include "cJSON.h"
+#include "message.h"
+#include "sock.h"
+#include "log.h"
+#include "protocol.h"
+#include "connection.h"
+#include    "uci_fn.h"
+#include <fcgi_stdio.h>
+#include <sqlite3.h>
+#include "timer.h"
+sqlite3 *pdb = NULL;
+v_list_t head;
+int pipefd[2];
+
+int cgi_init()
+{
+	char **array = NULL;
+	int num = 0;
+	if (!uuci_get("gateway_config.gateway_base.portal_cgi_loglevel", &array, &num)) {
+		log_leveljf = atoi(array[0]);
+		uuci_get_free(array, num);
+	}
+}
+
+int insert_log(char *client_mac, char *sensor_pin, int type, int alert_type, char *alert_value) 
+{
+	char sql[256] = {0};
+	snprintf(sql, sizeof(sql) - 1, "INSERT INTO `alert_log` (client_mac, sensor_pin, type, alert_type, alert_value) "
+			"VALUES('%s',%s, %d, %d, '%s');", client_mac, sensor_pin, type, alert_type, alert_value);
+	if(SQLITE_OK != sqlite3_exec(pdb,sql,NULL,NULL,&errmsg))
+	{
+			CGI_LOG(LOG_ERR, "insert record fail!%s\n",errmsg);
+	}
+	return 0;
+}
+
+int check_list_handle(void *para)
+{
+	//CGI_LOG(LOG_ERR, "timer_handle\n");
+	cJSON *array_item = NULL, *item = NULL, *client_mac = NULL,*sensor_pin = NULL, *time_stamp;
+	cJSON *off_time, *id;
+	char sql[256] = {0};
+	cJSON *check_list = cgi_sys_query_check_list_handler(NULL);
+	if (check_list) {
+		int check_num = cJSON_GetArraySize(check_list);
+		for (int i = 0; i < check_num; i++)
+		{
+			array_item = cJSON_GetArrayItem(check_list, i);
+			item = cJSON_GetObjectItem(array_item, "type");
+			off_time = cJSON_GetObjectItem(array_item, "off_time");
+			int type = atoi(item->valuestring);
+			item = cJSON_GetObjectItem(array_item, "alert_times");
+			int alert_times = atoi(item->valuestring);
+			id = cJSON_GetObjectItem(array_item, "id");
+			int low_value;
+			int high_value;
+			switch(type) {
+				case SENSOR_AIR_PRESSURE:
+					char sql_out[10][32];
+					item = cJSON_GetObjectItem(array_item, "low_value");
+					low_value = item->valueint;
+					item = cJSON_GetObjectItem(array_item, "high_value");
+					high_value = item->valueint;
+					client_mac = cJSON_GetObjectItem(array_item, "client_mac");
+					sensor_pin = cJSON_GetObjectItem(array_item, "sensor_pin");
+					time_stamp = cJSON_GetObjectItem(array_item, "capture_time");
+					
+					snprintf(sql, 256, "select * from air_pressure where client_mac='%s' and sensor_pin=%s order by id desc limit 1", 
+						client_mac->valuestring, sensor_pin->valuestring);
+					int colume = query_multi_result("where client_mac='%s' and sensor_pin=%s order by id desc limit 1", sql_out);
+					int cur_value = atoi(sql_out[3]);
+
+					if (time(NULL) - atoi(time_stamp->valuestring) > atoi(off_time->valueint)) {
+						alert_times++;
+						snprintf(sql, sizeof(sql) - 1, "update `check_list` set is_alerting=%d, alert_times=%d where "
+							"id=%s", 1,  alert_times, id->valuestring);
+						if(SQLITE_OK != sqlite3_exec(pdb,sql,NULL,NULL,&errmsg))
+						{
+								CGI_LOG(LOG_ERR, "update record fail!%s\n",errmsg);
+						}
+					} else if (cur_value <= low_value || cur_value >= high_value) {
+						alert_times++;
+						snprintf(sql, sizeof(sql) - 1, "update `check_list` set is_alerting=%d, alert_times=%d where "
+							"id=%s", 1,  alert_times, id->valuestring);
+						if(SQLITE_OK != sqlite3_exec(pdb,sql,NULL,NULL,&errmsg))
+						{
+								CGI_LOG(LOG_ERR, "update record fail!%s\n",errmsg);
+						}
+					} else {
+						snprintf(sql, sizeof(sql) - 1, "update `check_list` set is_alerting=%d where "
+							"id=%s", 0, id->valuestring);
+						if(SQLITE_OK != sqlite3_exec(pdb,sql,NULL,NULL,&errmsg))
+						{
+								CGI_LOG(LOG_ERR, "update record fail!%s\n",errmsg);
+						}
+					}
+					
+				break;
+
+				case SENSOR_TEMPER:
+					char sql_out[10][32];
+					item = cJSON_GetObjectItem(array_item, "low_value");
+					low_value = item->valueint;
+					item = cJSON_GetObjectItem(array_item, "hight_value");
+					high_value = item->valueint;
+					client_mac = cJSON_GetObjectItem(array_item, "client_mac");
+					sensor_pin = cJSON_GetObjectItem(array_item, "sensor_pin");
+					snprintf(sql, 256, "select * from temper where client_mac='%s' and sensor_pin=%s order by id desc limit 1", 
+						client_mac->valuestring, sensor_pin->valuestring);
+					int colume = query_multi_result("where client_mac='%s' and sensor_pin=%s order by id desc limit 1", sql_out);
+					int cur_value = atoi(sql_out[3]);
+				break;
+			}
+		}
+	}
+	return 0;
+}
+
+struct list_head board_list;
+extern int query_multi_result(char *sql, char *out[]);
+
+char board_mac[30][32];
+pthread_t my_thread;
+void *my_thread_thread_cb(void *arg)
+{
+	socketpair(PF_UNIX, SOCK_STREAM, 0, pipefd);
+	int ret = 0;
+	struct  timeval  timeout = {10,0};
+	int cmds[100];
+	setsockopt(pipefd[0], SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout,sizeof(struct timeval));
+	timer_list_init();
+	add_timer(check_list_handle, 2, 1, 10, NULL, 0);
+	while(1)
+	{
+		ret = recv(pipefd[0], cmds, 100, 0);
+		if (ret > 0) {
+	      for(int i = 0; i < ret; i++) {
+	        switch(cmds[i]) {
+	        case 1:
+	          break;
+	        }
+	      }
+	    }
+	    timer_handler();
+	}
+
+}
+
+int main()
+{
+
+	if (pdb == NULL) {
+		if(SQLITE_OK != sqlite3_open("/home/work/test.db3",&pdb))
+		{
+				CGI_LOG(LOG_ERR, "open dtabase fail!%s\n",sqlite3_errmsg(pdb));
+				exit(EXIT_FAILURE);
+		}
+
+	}
+	for (int i=0;i < 30;i++)
+	{
+		memset(board_mac[i], 0, 32);
+	}
+	int num = query_multi_result("select distinct client_mac from sensor_info", board_mac);
+	INIT_LIST_HEAD(&board_list);
+	for (int i = 0; i < num;i++)
+	{
+		board_info_t *board = malloc(sizeof(board_info_t));
+		memset(board, 0, sizeof(board));
+		strncpy(board->mac, &board_mac[i][0], 32);
+		list_add(&board->board_list, &board_list);
+		CGI_LOG(LOG_ERR,"board_mac:%s\n", board_mac[i]);
+	}
+	pthread_create(&my_thread, NULL, my_thread_thread_cb, NULL);
+	while(FCGI_Accept() >= 0)
+	{
+		connection_t con;
+		connection_init(&con);
+		connection_handel(&con);
+		printf("%s", con.out_str);
+		con.free(&con);	
+	}
+}
