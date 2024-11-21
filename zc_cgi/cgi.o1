@@ -1192,6 +1192,80 @@ out:
 	return 1;
 }
 
+int cgi_sys_add_check_list_handler(connection_t *con)
+{	
+	char *client_mac = con_value_get(con, "client_mac");
+	//char *board_name = con_value_get(con, "board_name");
+	char *sensor_type = con_value_get(con, "sensor_type");
+	char *sensor_pin = con_value_get(con, "sensor_pin");
+	char *off_time = con_value_get(con, "off_time");
+	char *low_value = con_value_get(con, "low_value");
+	char *high_value = con_value_get(con, "high_value");
+	char sql[256] = {0};
+	char *errmsg = NULL;
+	if (!client_mac || !sensor_pin || !sensor_type || !off_time) {
+		cJSON_AddNumberToObject(con->response, "code", 1);
+		cJSON_AddStringToObject(con->response, "msg", "no client_mac or no board_name");
+		goto out;
+	}
+
+	snprintf(sql, sizeof(sql), "select count(*) from check_list where client_mac='%s' and sensor_pin=%s;",
+	client_mac, sensor_pin);
+	if (query_table(sql, 1,0) > 0)
+	{
+		cJSON_AddNumberToObject(con->response, "code", 1);
+		cJSON_AddStringToObject(con->response, "msg", "sensor pin exist");
+		goto out;
+	}else
+	{
+		
+		snprintf(sql, sizeof(sql) - 1, "INSERT INTO `check_list` (client_mac, sensor_pin, type, off_time, low_value, high_value) "
+			"VALUES('%s',%d, %d, %d,%d,%d');", client_mac, atoi(sensor_pin), atoi(sensor_type), atoi(off_time), atoi(low_value), atoi(high_value));
+		if(SQLITE_OK != sqlite3_exec(pdb,sql,NULL,NULL,&errmsg))
+		{
+			CGI_LOG(LOG_ERR, "insert record fail!%s\n",errmsg);
+			cJSON_AddNumberToObject(con->response, "code", 1);
+			cJSON_AddStringToObject(con->response, "msg", errmsg);
+			goto out;
+		}
+	}
+	cJSON_AddNumberToObject(con->response, "code", 0);
+	
+out:
+	return 1;
+}
+
+
+int cgi_sys_update_check_list_handler(connection_t *con)
+{	
+	char *id = con_value_get(con, "id");
+	char *low_value = con_value_get(con, "low_value");
+	char *high_value = con_value_get(con, "high_value");
+	char *off_time = con_value_get(con, "off_time");
+	char *enable = con_value_get(con, "enable");
+	char sql[256] = {0};
+	char *errmsg = NULL;
+	if (!id) {
+		cJSON_AddNumberToObject(con->response, "code", 1);
+		cJSON_AddStringToObject(con->response, "msg", "no id");
+		goto out;
+	}
+	
+	snprintf(sql, sizeof(sql) - 1, "update `check_list` set low_value=%d, high_value=%d, off_time=%d, enable=%d where "
+		"id=%s", atoi(low_value),  atoi(high_value),  atoi(off_time), atoi(enable));
+	if(SQLITE_OK != sqlite3_exec(pdb,sql,NULL,NULL,&errmsg))
+	{
+			CGI_LOG(LOG_ERR, "update record fail!%s\n",errmsg);
+			cJSON_AddNumberToObject(con->response, "code", 1);
+			cJSON_AddStringToObject(con->response, "msg", errmsg);
+			goto out;
+	}
+	cJSON_AddNumberToObject(con->response, "code", 0);
+
+out:
+	return 1;
+}
+
 cJSON* cgi_sys_query_check_list_handler(connection *con)
 {	
 	
@@ -1219,6 +1293,26 @@ cJSON* cgi_sys_query_check_list_handler(connection *con)
 	}
 err:
 	return NULL;
+out:
+	return 1;
+}
+
+int cgi_sys_query_feed_event_handler(connection_t *con)
+{	
+	char sql[256] = {0};
+	char *errmsg = NULL;
+	cJSON *array = cJSON_CreateArray();
+	snprintf(sql, sizeof(sql), "select * from feed_event where capture_time between datetime('now','-5 days', '+1 seconds', 'localtime') "
+			"and  datetime('now','-1 seconds', 'localtime') order by id desc");
+	if(SQLITE_OK != sqlite3_exec(pdb, sql, query_data_to_json,(void *)array, &errmsg))
+	{
+			CGI_LOG(LOG_ERR, "queray fail!%s\n",errmsg);
+			cJSON_AddNumberToObject(con->response, "code", 1);
+			cJSON_AddStringToObject(con->response, "msg", errmsg);
+			goto out;
+	}
+	cJSON_AddNumberToObject(con->response, "code", 0);
+	cJSON_AddItemToObject(con->response, "data", array);
 out:
 	return 1;
 }

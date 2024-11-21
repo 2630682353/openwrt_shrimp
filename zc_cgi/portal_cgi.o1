@@ -48,6 +48,10 @@ int check_list_handle(void *para)
 		for (int i = 0; i < check_num; i++)
 		{
 			array_item = cJSON_GetArrayItem(check_list, i);
+			item = cJSON_GetObjectItem(array_item, "enable");
+			int enable = atoi(item->valuestring);
+			if (enable == 0)
+				continue;
 			item = cJSON_GetObjectItem(array_item, "type");
 			off_time = cJSON_GetObjectItem(array_item, "off_time");
 			int type = atoi(item->valuestring);
